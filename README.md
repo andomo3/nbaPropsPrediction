@@ -1,2 +1,0 @@
-# nbaPropsPrediction
-Abba, Husaam, Shiv
