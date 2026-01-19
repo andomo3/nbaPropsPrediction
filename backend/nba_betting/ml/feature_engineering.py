@@ -1,0 +1,1 @@
+# Feature engineering scaffolding for period-specific props.

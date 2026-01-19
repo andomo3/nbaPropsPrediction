@@ -1,0 +1,1 @@
+# Prediction scaffolding for period-specific props.
