@@ -8,6 +8,8 @@
 
 # Production
 /build
+/dist
+.vite
 
 # Misc
 .DS_Store
