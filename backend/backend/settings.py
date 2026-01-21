@@ -2,13 +2,20 @@ from pathlib import Path
 import os
 
 import dj_database_url
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR.parent / ".env")
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "replace-me")
-DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
+SECRET_KEY = os.getenv("SECRET_KEY", os.getenv("DJANGO_SECRET_KEY", "replace-me"))
+DEBUG = os.getenv("DEBUG", os.getenv("DJANGO_DEBUG", "true")).lower() == "true"
 ALLOWED_HOSTS = [
-    host for host in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if host
+    host
+    for host in os.getenv(
+        "ALLOWED_HOSTS", os.getenv("DJANGO_ALLOWED_HOSTS", "")
+    ).split(",")
+    if host
 ]
 
 INSTALLED_APPS = [
@@ -57,7 +64,9 @@ ASGI_APPLICATION = "backend.asgi.application"
 
 DATABASES = {
     "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        default=os.getenv(
+            "DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+        ),
         conn_max_age=600,
     )
 }
@@ -89,3 +98,5 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CORS_ALLOWED_ORIGINS = [
     origin for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if origin
 ]
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")

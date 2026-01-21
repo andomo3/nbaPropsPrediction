@@ -202,7 +202,7 @@ function App() {
             Predict the Future.
           </h1>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Woudln't you like to know the future?
+            Wouldn't you like to know?
           </p>
         </motion.div>
 
