@@ -1,10 +1,85 @@
 # Schema Reference
 
-This document focuses on the period-specific tables that power quarter-level prop
+This document highlights the core tables that power quarter-level prop
 predictions. Types below align with the Django models in `backend/nba_betting/models.py`.
+
+## Player
+Represents an NBA player.
+
+Primary key:
+- id (BigAutoField)
+
+Foreign keys:
+- None
+
+Constraints/indexes:
+- Unique: nba_id
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| name | string | Yes | Full name. |
+| team | string | Yes | Team abbreviation or name. |
+| position | string | Yes | Roster position. |
+| height | string | Yes | Stored as string (ex: 6-8). |
+| weight | int | Yes | Weight in pounds. |
+| nba_id | int | Yes | Unique NBA ID. |
+
+## Game
+Represents a single NBA game.
+
+Primary key:
+- id (BigAutoField)
+
+Foreign keys:
+- None
+
+Constraints/indexes:
+- Unique: game_id
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| game_id | string | Yes | Unique game identifier. |
+| date | date | Yes | Game date (UTC). |
+| home_team | string | Yes | Home team. |
+| away_team | string | Yes | Away team. |
+| home_score | int | Yes | Final score. |
+| away_score | int | Yes | Final score. |
+
+## PlayerGameStats
+Full-game stat line for a player.
+
+Primary key:
+- id (BigAutoField)
+
+Foreign keys:
+- player -> Player.id
+- game -> Game.id
+
+Constraints/indexes:
+- FK indexes on player, game (implicit)
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| player | FK -> Player | Yes | Links to the player record. |
+| game | FK -> Game | Yes | Links to the game record. |
+| min | decimal | Yes | Minutes played in game. |
+| pts | int | Yes | Points. |
+| reb | int | Yes | Rebounds. |
+| ast | int | Yes | Assists. |
 
 ## PlayerQuarterStats
 Represents a single player's box score stats for one quarter of a game.
+
+Primary key:
+- id (BigAutoField)
+
+Foreign keys:
+- player -> Player.id
+- game -> Game.id
+
+Constraints/indexes:
+- Unique: (player, game, quarter)
+- FK indexes on player, game (implicit)
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
@@ -15,10 +90,6 @@ Represents a single player's box score stats for one quarter of a game.
 | reb | int | Yes | Rebounds in the quarter. |
 | ast | int | Yes | Assists in the quarter. |
 | min | decimal | Yes | Minutes played in the quarter. |
-
-Constraints and indexes:
-- Unique constraint on (player, game, quarter).
-- Implicit FK indexes via Django.
 
 Example record:
 - player: 203507 (Giannis Antetokounmpo)
@@ -31,6 +102,16 @@ Example record:
 
 ## PlayerPropLine
 Represents a sportsbook line for a player's stat in a specific period.
+
+Primary key:
+- id (BigAutoField)
+
+Foreign keys:
+- player -> Player.id
+- game -> Game.id
+
+Constraints/indexes:
+- FK indexes on player, game (implicit)
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
@@ -50,3 +131,45 @@ Example record:
 - threshold: 2.5
 - odds: -115
 - bookmaker: DraftKings
+
+## GameBettingLine
+Game-level market context.
+
+Primary key:
+- id (BigAutoField)
+
+Foreign keys:
+- game -> Game.id
+
+Constraints/indexes:
+- FK indexes on game (implicit)
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| game | FK -> Game | Yes | Links to the game record. |
+| home_spread | float | Yes | Home spread. |
+| over_under | float | Yes | Total points line. |
+| favorite | string | Yes | Market favorite. |
+
+## Prediction
+Stores model predictions for tracking and auditing.
+
+Primary key:
+- id (BigAutoField)
+
+Foreign keys:
+- player -> Player.id
+- game -> Game.id
+
+Constraints/indexes:
+- FK indexes on player, game (implicit)
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| player | FK -> Player | Yes | Links to the player record. |
+| game | FK -> Game | Yes | Links to the game record. |
+| stat_type | string | Yes | Example: points, rebounds. |
+| period | int | Yes | Quarter 1-4. |
+| threshold | float | Yes | Line value. |
+| predicted_prob | float | Yes | Model probability. |
+| is_over_recommended | bool | Yes | True for Over recommendation. |

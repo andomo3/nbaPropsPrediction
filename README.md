@@ -13,6 +13,12 @@ py backend/manage.py runserver
 
 The API will be available at `http://localhost:8000`.
 
+If you change Django models, run:
+```bash
+py backend/manage.py makemigrations
+py backend/manage.py migrate
+```
+
 ## Frontend (Vite)
 
 ```bash
