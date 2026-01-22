@@ -1,0 +1,11 @@
+__pycache__/
+venv/
+.venv/
+node_modules/
+frontend/node_modules/
+.git/
+.gitignore
+.env
+data/
+frontend/dist/
+frontend/.vite/

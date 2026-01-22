@@ -1,69 +1,76 @@
 from django.db import models
 
 
-class Player(models.Model):
+class Team(models.Model):
+    city = models.CharField(max_length=50)
+    nickname = models.CharField(max_length=50)
+    abbreviation = models.CharField(max_length=10)
+
+
+class Bookmaker(models.Model):
     name = models.CharField(max_length=100)
-    team = models.CharField(max_length=50)
-    nba_id = models.PositiveIntegerField(unique=True)
+    site_url = models.URLField(max_length=200, blank=True)
+
+
+class Player(models.Model):
+    nba_id = models.PositiveIntegerField(primary_key=True)
+    first_name = models.CharField(max_length=50)
+    last_name = models.CharField(max_length=50)
+    position = models.CharField(max_length=20)
+    is_active = models.BooleanField(default=True)
+    current_team = models.ForeignKey(
+        Team, on_delete=models.SET_NULL, null=True, blank=True
+    )
 
 
 class Game(models.Model):
-    game_id = models.CharField(max_length=20, unique=True)
+    game_id = models.CharField(max_length=20, primary_key=True)
     date = models.DateField()
-    home_team = models.CharField(max_length=50)
-    away_team = models.CharField(max_length=50)
+    season = models.CharField(max_length=9)
+    home_score = models.PositiveSmallIntegerField()
+    away_score = models.PositiveSmallIntegerField()
+    home_team = models.ForeignKey(
+        Team, on_delete=models.CASCADE, related_name="home_games"
+    )
+    away_team = models.ForeignKey(
+        Team, on_delete=models.CASCADE, related_name="away_games"
+    )
 
 
-class PlayerGameStats(models.Model):
+class PlayerStats(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE)
     game = models.ForeignKey(Game, on_delete=models.CASCADE)
-    min = models.DecimalField(max_digits=5, decimal_places=2)
-    pts = models.PositiveSmallIntegerField()
-    reb = models.PositiveSmallIntegerField()
-    ast = models.PositiveSmallIntegerField()
-
-
-class PlayerQuarterStats(models.Model):
-    player = models.ForeignKey(Player, on_delete=models.CASCADE)
-    game = models.ForeignKey(Game, on_delete=models.CASCADE)
-    quarter = models.IntegerField(help_text="1, 2, 3, or 4")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    period = models.IntegerField(help_text="0=Full, 1-4=Quarter")
     pts = models.IntegerField(default=0)
     reb = models.IntegerField(default=0)
     ast = models.IntegerField(default=0)
+    min = models.FloatField(default=0.0)
     fga = models.IntegerField(default=0)
     fgm = models.IntegerField(default=0)
-    min = models.FloatField(default=0.0)
-    fouls = models.IntegerField(default=0)
 
     class Meta:
-        unique_together = ["player", "game", "quarter"]
-        indexes = [
-            models.Index(fields=["player", "quarter"], name="pqs_player_quarter_idx"),
-        ]
-
-
-class GameBettingLine(models.Model):
-    game = models.ForeignKey(Game, on_delete=models.CASCADE)
-    home_spread = models.FloatField()
-    over_under = models.FloatField()
-    favorite = models.CharField(max_length=50)
+        unique_together = ["player", "game", "period"]
 
 
 class PlayerPropLine(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE)
     game = models.ForeignKey(Game, on_delete=models.CASCADE)
-    stat_type = models.CharField(max_length=32)
-    period = models.PositiveSmallIntegerField()
-    threshold = models.FloatField()
-    odds = models.IntegerField()
-    bookmaker = models.CharField(max_length=100)
+    bookmaker = models.ForeignKey(Bookmaker, on_delete=models.CASCADE)
+    prop_type = models.CharField(max_length=50)
+    period = models.IntegerField()
+    line = models.FloatField()
+    odds_over = models.IntegerField()
+    odds_under = models.IntegerField()
+    timestamp = models.DateTimeField()
+
+    class Meta:
+        unique_together = ["player", "game", "bookmaker", "prop_type", "period"]
 
 
 class Prediction(models.Model):
-    player = models.ForeignKey(Player, on_delete=models.CASCADE)
-    game = models.ForeignKey(Game, on_delete=models.CASCADE)
-    stat_type = models.CharField(max_length=32)
-    period = models.PositiveSmallIntegerField()
-    threshold = models.FloatField()
-    predicted_prob = models.FloatField()
-    is_over_recommended = models.BooleanField()
+    prop_line = models.ForeignKey(PlayerPropLine, on_delete=models.CASCADE)
+    model_version = models.CharField(max_length=50)
+    prediction_timestamp = models.DateTimeField()
+    prob_over = models.FloatField()
+    recommendation = models.CharField(max_length=50)

@@ -1,22 +1,22 @@
 from django.contrib import admin
 
 from .models import (
+    Bookmaker,
     Game,
-    GameBettingLine,
     Player,
-    PlayerGameStats,
     PlayerPropLine,
-    PlayerQuarterStats,
+    PlayerStats,
     Prediction,
+    Team,
 )
 
 admin.site.register(
     [
+        Team,
+        Bookmaker,
         Player,
         Game,
-        PlayerGameStats,
-        PlayerQuarterStats,
-        GameBettingLine,
+        PlayerStats,
         PlayerPropLine,
         Prediction,
     ]

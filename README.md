@@ -12,6 +12,7 @@ Full-stack scaffold for period-specific NBA prop prediction.
 docker-compose up -d
 py -m pip install -r backend/requirements.txt
 py backend/manage.py migrate
+py backend/manage.py verify_schema_integrity
 py backend/manage.py runserver
 ```
 
@@ -22,6 +23,15 @@ If you change Django models, run:
 py backend/manage.py makemigrations
 py backend/manage.py migrate
 ```
+
+If you want to run Django inside Docker:
+```bash
+docker-compose up -d --build
+docker-compose exec web python backend/manage.py migrate
+```
+
+If migrations were reset and tables are missing in SQLite, delete
+`backend/db.sqlite3` and run migrations again.
 
 ## Frontend (Vite)
 
