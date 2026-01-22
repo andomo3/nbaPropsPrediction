@@ -2,6 +2,10 @@
 
 Full-stack scaffold for period-specific NBA prop prediction.
 
+## Architecture Diagram
+
+![EERD Diagram](docs/erdplus.png)
+
 ## Quick Start (Backend)
 
 ```bash
