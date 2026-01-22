@@ -33,6 +33,20 @@ docker-compose exec web python backend/manage.py migrate
 If migrations were reset and tables are missing in SQLite, delete
 `backend/db.sqlite3` and run migrations again.
 
+## Data Ingestion
+
+Source of truth: `backend/docs/DATA_INGESTION_STRATEGY.md`
+
+Dry run (prints a single game's JSON):
+```bash
+python backend/manage.py ingest_history --dry-run
+```
+
+Limit games for testing:
+```bash
+python backend/manage.py ingest_history --season 2023-24 --max-games 5
+```
+
 ## Frontend (Vite)
 
 ```bash
