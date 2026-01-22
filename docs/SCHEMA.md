@@ -19,9 +19,6 @@ Constraints/indexes:
 | --- | --- | --- | --- |
 | name | string | Yes | Full name. |
 | team | string | Yes | Team abbreviation or name. |
-| position | string | Yes | Roster position. |
-| height | string | Yes | Stored as string (ex: 6-8). |
-| weight | int | Yes | Weight in pounds. |
 | nba_id | int | Yes | Unique NBA ID. |
 
 ## Game
@@ -42,8 +39,6 @@ Constraints/indexes:
 | date | date | Yes | Game date (UTC). |
 | home_team | string | Yes | Home team. |
 | away_team | string | Yes | Away team. |
-| home_score | int | Yes | Final score. |
-| away_score | int | Yes | Final score. |
 
 ## PlayerGameStats
 Full-game stat line for a player.
@@ -89,7 +84,10 @@ Constraints/indexes:
 | pts | int | Yes | Points scored in the quarter. |
 | reb | int | Yes | Rebounds in the quarter. |
 | ast | int | Yes | Assists in the quarter. |
-| min | decimal | Yes | Minutes played in the quarter. |
+| fga | int | Yes | Field goal attempts. |
+| fgm | int | Yes | Field goals made. |
+| min | float | Yes | Minutes played in the quarter. |
+| fouls | int | Yes | Personal fouls. |
 
 Example record:
 - player: 203507 (Giannis Antetokounmpo)
@@ -98,7 +96,10 @@ Example record:
 - pts: 8
 - reb: 4
 - ast: 2
+- fga: 6
+- fgm: 3
 - min: 10.5
+- fouls: 1
 
 ## PlayerPropLine
 Represents a sportsbook line for a player's stat in a specific period.

@@ -4,9 +4,6 @@ from django.db import models
 class Player(models.Model):
     name = models.CharField(max_length=100)
     team = models.CharField(max_length=50)
-    position = models.CharField(max_length=20)
-    height = models.CharField(max_length=10)
-    weight = models.PositiveSmallIntegerField()
     nba_id = models.PositiveIntegerField(unique=True)
 
 
@@ -15,8 +12,6 @@ class Game(models.Model):
     date = models.DateField()
     home_team = models.CharField(max_length=50)
     away_team = models.CharField(max_length=50)
-    home_score = models.PositiveSmallIntegerField()
-    away_score = models.PositiveSmallIntegerField()
 
 
 class PlayerGameStats(models.Model):
@@ -31,18 +26,19 @@ class PlayerGameStats(models.Model):
 class PlayerQuarterStats(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE)
     game = models.ForeignKey(Game, on_delete=models.CASCADE)
-    quarter = models.PositiveSmallIntegerField()
-    pts = models.PositiveSmallIntegerField()
-    reb = models.PositiveSmallIntegerField()
-    ast = models.PositiveSmallIntegerField()
-    min = models.DecimalField(max_digits=5, decimal_places=2)
+    quarter = models.IntegerField(help_text="1, 2, 3, or 4")
+    pts = models.IntegerField(default=0)
+    reb = models.IntegerField(default=0)
+    ast = models.IntegerField(default=0)
+    fga = models.IntegerField(default=0)
+    fgm = models.IntegerField(default=0)
+    min = models.FloatField(default=0.0)
+    fouls = models.IntegerField(default=0)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["player", "game", "quarter"],
-                name="unique_player_game_quarter",
-            )
+        unique_together = ["player", "game", "quarter"]
+        indexes = [
+            models.Index(fields=["player", "quarter"], name="pqs_player_quarter_idx"),
         ]
 
 
