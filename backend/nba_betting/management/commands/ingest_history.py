@@ -91,6 +91,44 @@ def get_value(row, header_map, key, default=None):
     return row[index]
 
 
+def extract_team_players(data):
+    boxscore = (
+        data.get("boxScoreTraditional")
+        or data.get("boxScoreTraditionalV3")
+        or data.get("boxscoretraditional")
+        or {}
+    )
+    players = []
+    for side in ("homeTeam", "awayTeam"):
+        team = boxscore.get(side) or {}
+        team_abbrev = (
+            team.get("teamTricode")
+            or team.get("teamCode")
+            or team.get("teamAbbreviation")
+        )
+        team_city = team.get("teamCity") or team.get("city") or ""
+        team_name = team.get("teamName") or team.get("nickname") or ""
+        for player in team.get("players", []):
+            players.append(
+                {
+                    "player": player,
+                    "team_abbrev": team_abbrev,
+                    "team_city": team_city,
+                    "team_name": team_name,
+                }
+            )
+    return players
+
+
+def get_stat(player_data, stats, *keys, default=0):
+    for key in keys:
+        if stats and key in stats:
+            return stats.get(key)
+        if key in player_data:
+            return player_data.get(key)
+    return default
+
+
 class Command(BaseCommand):
     help = "Ingest historical NBA player stats (period 0-4) with rate limiting."
 
@@ -200,21 +238,30 @@ class Command(BaseCommand):
                 time.sleep(0.6)
 
                 data = boxscore.get_dict()
-                player_headers, player_rows = extract_player_rows(data)
-                header_map = {header: idx for idx, header in enumerate(player_headers)}
+                player_entries = extract_team_players(data)
 
-                for row in player_rows:
-                    player_id = get_value(row, header_map, "PLAYER_ID")
-                    player_name = get_value(row, header_map, "PLAYER_NAME")
-                    team_abbrev = get_value(row, header_map, "TEAM_ABBREVIATION")
-                    team_name = get_value(row, header_map, "TEAM_NAME")
-                    position = get_value(row, header_map, "START_POSITION", "") or ""
+                for entry in player_entries:
+                    player_data = entry["player"]
+                    player_id = player_data.get("personId") or player_data.get("playerId")
+                    first_name = player_data.get("firstName") or ""
+                    last_name = player_data.get("familyName") or player_data.get(
+                        "lastName", ""
+                    )
+                    position = player_data.get("position") or "UNK"
+                    team_abbrev = entry["team_abbrev"] or player_data.get("teamTricode")
+                    team_city = entry["team_city"]
+                    team_name = entry["team_name"]
 
                     if not player_id or not team_abbrev:
                         continue
 
-                    first_name, last_name = split_player_name(player_name)
+                    if not first_name or not last_name:
+                        full_name = player_data.get("name") or ""
+                        first_name, last_name = split_player_name(full_name)
+
                     city, nickname = split_team_name(team_name, team_abbrev)
+                    if team_city:
+                        city = team_city
                     team, _ = Team.objects.get_or_create(
                         abbreviation=team_abbrev,
                         defaults={"city": city, "nickname": nickname},
@@ -231,20 +278,48 @@ class Command(BaseCommand):
                         },
                     )
 
-                    PlayerStats.objects.update_or_create(
-                        player=player,
-                        game=game,
-                        period=period,
-                        defaults={
-                            "team": team,
-                            "pts": get_value(row, header_map, "PTS", 0) or 0,
-                            "reb": get_value(row, header_map, "REB", 0) or 0,
-                            "ast": get_value(row, header_map, "AST", 0) or 0,
-                            "min": parse_minutes(get_value(row, header_map, "MIN")),
-                            "fga": get_value(row, header_map, "FGA", 0) or 0,
-                            "fgm": get_value(row, header_map, "FGM", 0) or 0,
-                        },
-                    )
+                    stats = player_data.get("statistics") or player_data.get("stats") or {}
+                    try:
+                        PlayerStats.objects.update_or_create(
+                            player=player,
+                            game=game,
+                            period=period,
+                            defaults={
+                                "team": team,
+                                "pts": get_stat(player_data, stats, "points", "PTS", default=0) or 0,
+                                "reb": get_stat(
+                                    player_data, stats, "reboundsTotal", "rebounds", "REB", default=0
+                                )
+                                or 0,
+                                "ast": get_stat(
+                                    player_data, stats, "assists", "AST", default=0
+                                )
+                                or 0,
+                                "min": parse_minutes(
+                                    get_stat(player_data, stats, "minutes", "MIN")
+                                ),
+                                "fga": get_stat(
+                                    player_data,
+                                    stats,
+                                    "fieldGoalsAttempted",
+                                    "FGA",
+                                    default=0,
+                                )
+                                or 0,
+                                "fgm": get_stat(
+                                    player_data,
+                                    stats,
+                                    "fieldGoalsMade",
+                                    "FGM",
+                                    default=0,
+                                )
+                                or 0,
+                            },
+                        )
+                    except Exception as exc:
+                        self.stdout.write(
+                            self.style.ERROR(f"Stats Error: {exc}")
+                        )
 
                 periods_done.append(f"P{period}")
 
