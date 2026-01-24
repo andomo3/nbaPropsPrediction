@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.db.models import Q
 
 from .ml.predictor import predict_scenario
 from .models import Player
@@ -13,13 +14,14 @@ class PlayerListView(APIView):
         if query:
             queryset = queryset.filter(name__icontains=query)
 
-        players = queryset.order_by("name")[:25]
+        players = queryset.order_by("last_name", "first_name")[:25]
         payload = [
             {
-                "id": player.id,
-                "name": player.name,
-                "team": player.team,
-                "nba_id": player.nba_id,
+                "id": player.nba_id,
+                "first_name": player.first_name,
+                "last_name": player.last_name,
+                "full_name": f"{player.first_name} {player.last_name}",
+                "team": player.current_team.abbreviation if player.current_team else None,
             }
             for player in players
         ]
@@ -66,7 +68,19 @@ class ManualPredictionView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        player = Player.objects.filter(name__iexact=player_name).first()
+        player = None
+        if player_name:
+            parts = [part for part in player_name.split(" ") if part]
+            if len(parts) >= 2:
+                player = Player.objects.filter(
+                    first_name__iexact=parts[0],
+                    last_name__iexact=" ".join(parts[1:]),
+                ).first()
+            if not player:
+                player = Player.objects.filter(
+                    Q(first_name__icontains=player_name)
+                    | Q(last_name__icontains=player_name)
+                ).first()
         if not player:
             return Response(
                 {"detail": "Player not found."},
