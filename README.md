@@ -98,7 +98,12 @@ docs/ML_FEATURE_GUIDE.md
 Manual prediction:
 ```bash
 POST /api/predict/manual/
-{ "player_name": "Jayson Tatum", "stat": "pts", "line": 26.5 }
+{ "player_name": "Jayson Tatum", "stat": "pts", "line": 26.5, "opponent": "MIA", "is_home": true, "days_rest": 2 }
+```
+
+Options for dropdowns:
+```bash
+GET /api/options/
 ```
 
 Environment:

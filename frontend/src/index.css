@@ -14,7 +14,8 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #09090b; /* zinc-950 */
+    background-color: #09090b;
+    /* zinc-950 */
     color: #fff;
     overflow-x: hidden;
   }
@@ -24,9 +25,9 @@
   .glass-panel {
     @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-xl;
   }
-  
+
   .glass-input {
-    @apply bg-white/5 border border-white/10 text-white placeholder-white/30 transition-all duration-300 focus:bg-white/10 focus:border-electric-blue/50 focus:shadow-[0_0_20px_rgba(0,217,255,0.15)] outline-none;
+    @apply bg-white/5 border border-white/10 text-white placeholder-white/30 transition-all duration-300 focus:bg-white/10 focus:border-electric-blue/50 focus:shadow-[0_0_20px_rgba(0, 217, 255, 0.15)] outline-none;
   }
 }
 
@@ -46,4 +47,8 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
+}
+
+.mb-12 {
+  margin-bottom: none;
 }

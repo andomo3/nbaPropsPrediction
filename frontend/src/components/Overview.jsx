@@ -1,17 +1,25 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import TextType from './TextType';
 
 const Overview = () => {
     return (
-        <div className="max-w-4xl mx-auto px-4 py-12 relative z-10">
+        <div className="max-w-4xl mx-auto px-4 py-40 relative z-10">
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center mb-12"
             >
-                <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-4 bg-gradient-to-b from-white via-white to-gray-500 bg-clip-text text-transparent">
-                    Platform Overview
-                </h1>
+                <TextType
+                    as="h1"
+                    text="Platform Overview"
+                    typingSpeed={60}
+                    pauseDuration={1200}
+                    deletingSpeed={40}
+                    loop={false}
+                    showCursor={false}
+                    className="text-4xl md:text-5xl font-bold tracking-tighter mb-4 bg-gradient-to-b from-white via-white to-gray-500 bg-clip-text text-transparent"
+                />
                 <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
                     Understanding how our predictive models work.
                 </p>
