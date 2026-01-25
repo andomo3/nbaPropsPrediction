@@ -47,6 +47,69 @@ Limit games for testing:
 python backend/manage.py ingest_history --season 2023-24 --max-games 5
 ```
 
+Tune network timeouts/retries if the NBA API is slow:
+```bash
+python backend/manage.py ingest_history --season 2023-24 --timeout 90 --max-retries 5
+```
+
+Skip games already fully ingested:
+```bash
+python backend/manage.py ingest_history --season 2023-24 --skip-existing
+```
+
+The ingestion script uses jittered delays, exponential cool-downs on timeouts,
+and will skip already ingested periods when resuming.
+
+Quick ingestion summary:
+```bash
+python backend/manage.py summarize_data
+```
+
+## Data Export & Cleaning
+
+MVP export (full-game only, period=0):
+```bash
+python backend/manage.py export_raw
+```
+Output includes `player_team`, `home_team`, and `away_team` for matchup features.
+
+Cleaning pipeline (wide format):
+```bash
+python notebooks/data_cleaning_pipeline.py
+```
+
+Exports are written to the `exports/` folder in the repo root.
+If `exports/nba_mvp_data.csv` exists, the pipeline outputs
+`exports/nba_training_mvp_v1.csv`. Otherwise it uses
+`exports/nba_raw_long.csv` and outputs `exports/nba_training_wide_v1.csv`.
+
+Notebook (combined export + cleaning):
+```bash
+data_export_and_cleaning.ipynb
+```
+
+Feature engineering guide:
+```bash
+docs/ML_FEATURE_GUIDE.md
+```
+
+## Betting Engine API
+
+Manual prediction:
+```bash
+POST /api/predict/manual/
+{ "player_name": "Jayson Tatum", "stat": "pts", "line": 26.5, "opponent": "MIA", "is_home": true, "days_rest": 2 }
+```
+
+Options for dropdowns:
+```bash
+GET /api/options/
+```
+
+Environment:
+- `MODEL_DIR` points to XGBoost model JSON files (e.g. `data/models/pts_xgb.json`).
+- `ODDS_API_KEY` enables on-demand odds fetching in `services/odds_api.py`.
+
 ## Frontend (Vite)
 
 ```bash

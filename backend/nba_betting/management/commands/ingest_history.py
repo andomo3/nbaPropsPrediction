@@ -1,12 +1,29 @@
 import json
+import random
 import time
 from datetime import date
+
+from requests import RequestException
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import ReadTimeout as RequestsReadTimeout
+from urllib3.exceptions import ReadTimeoutError as Urllib3ReadTimeoutError
 
 from django.core.management.base import BaseCommand
 
 from nba_api.stats.endpoints import boxscoretraditionalv3, leaguegamelog
 
 from nba_betting.models import Game, Player, PlayerStats, Team
+
+DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://www.nba.com/",
+    "Origin": "https://www.nba.com",
+    "Accept": "application/json, text/plain, */*",
+}
 
 
 def current_season_label():
@@ -129,6 +146,60 @@ def get_stat(player_data, stats, *keys, default=0):
     return default
 
 
+def fetch_boxscore(game_id, period, timeout, max_retries, log, style=None):
+    for attempt in range(1, max_retries + 1):
+        try:
+            if period == 0:
+                response = boxscoretraditionalv3.BoxScoreTraditionalV3(
+                    game_id=game_id,
+                    timeout=timeout,
+                    headers=DEFAULT_HEADERS,
+                )
+            else:
+                response = boxscoretraditionalv3.BoxScoreTraditionalV3(
+                    game_id=game_id,
+                    start_period=period,
+                    end_period=period,
+                    timeout=timeout,
+                    headers=DEFAULT_HEADERS,
+                )
+            return response
+        except (RequestException, TimeoutError) as exc:
+            message = f"Request error for {game_id} P{period}: {exc}"
+            if style:
+                log(style.ERROR(message))
+            else:
+                log(message)
+            if attempt >= max_retries:
+                return None
+            cooldown = 30 if attempt == 1 else 60
+            cooldown_message = f"Timeout! Cooling down for {cooldown}s..."
+            if style:
+                log(style.WARNING(cooldown_message))
+            else:
+                log(cooldown_message)
+            time.sleep(cooldown)
+        finally:
+            time.sleep(random.uniform(0.6, 1.2))
+
+
+def fetch_game_log(season, timeout, max_retries, log, style=None):
+    for attempt in range(1, max_retries + 1):
+        try:
+            return leaguegamelog.LeagueGameLog(
+                season=season, timeout=timeout, headers=DEFAULT_HEADERS
+            )
+        except (RequestsReadTimeout, Urllib3ReadTimeoutError, RequestsConnectionError, TimeoutError) as exc:
+            message = f"Schedule fetch timed out. Retrying in 30s... ({exc})"
+            if style:
+                log(style.WARNING(message))
+            else:
+                log(message)
+            if attempt >= max_retries:
+                return None
+            time.sleep(30)
+
+
 class Command(BaseCommand):
     help = "Ingest historical NBA player stats (period 0-4) with rate limiting."
 
@@ -136,13 +207,28 @@ class Command(BaseCommand):
         parser.add_argument("--season", default=current_season_label())
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--max-games", type=int, default=None)
+        parser.add_argument("--timeout", type=int, default=60)
+        parser.add_argument("--max-retries", type=int, default=3)
+        parser.add_argument(
+            "--skip-existing",
+            action="store_true",
+            help="Skip games that already have PlayerStats for all periods.",
+        )
 
     def handle(self, *args, **options):
         season = options["season"]
         dry_run = options["dry_run"]
         max_games = options["max_games"]
+        timeout = options["timeout"]
+        max_retries = options["max_retries"]
+        skip_existing = options["skip_existing"]
 
-        log = leaguegamelog.LeagueGameLog(season=season)
+        log = fetch_game_log(
+            season, timeout, max_retries=5, log=self.stdout.write, style=self.style
+        )
+        if not log:
+            self.stdout.write(self.style.ERROR("Schedule fetch failed after retries."))
+            return
         log_data = log.get_dict()
         log_set = find_result_set(log_data, "LeagueGameLog")
         if not log_set:
@@ -182,12 +268,29 @@ class Command(BaseCommand):
 
         if dry_run and game_ids:
             sample_game = game_ids[0]
-            sample = boxscoretraditionalv3.BoxScoreTraditionalV3(game_id=sample_game)
-            time.sleep(0.6)
+            sample = fetch_boxscore(
+                sample_game, 0, timeout, max_retries, self.stdout.write, self.style
+            )
+            if not sample:
+                self.stdout.write(self.style.ERROR("Dry run failed: no response."))
+                return
             self.stdout.write(json.dumps(sample.get_dict(), indent=2))
             return
 
         for game_id in game_ids:
+            existing_periods = set(
+                PlayerStats.objects.filter(game_id=game_id)
+                .values_list("period", flat=True)
+            )
+            if Game.objects.filter(game_id=game_id).exists() and not existing_periods:
+                self.stdout.write(
+                    f"Re-fetching {game_id}: game exists but has 0 stats."
+                )
+            if skip_existing:
+                if existing_periods.issuperset({0, 1, 2, 3, 4}):
+                    self.stdout.write(f"Skipping {game_id}: already ingested.")
+                    continue
+
             entries = game_index[game_id]["entries"]
             home_entry = next((e for e in entries if e["is_home"]), None)
             away_entry = next((e for e in entries if not e["is_home"]), None)
@@ -225,17 +328,17 @@ class Command(BaseCommand):
 
             periods_done = []
             for period in [0, 1, 2, 3, 4]:
-                if period == 0:
-                    boxscore = boxscoretraditionalv3.BoxScoreTraditionalV3(
-                        game_id=game_id
+                if period in existing_periods:
+                    periods_done.append(f"P{period}(skip)")
+                    continue
+                boxscore = fetch_boxscore(
+                    game_id, period, timeout, max_retries, self.stdout.write, self.style
+                )
+                if not boxscore:
+                    self.stdout.write(
+                        self.style.ERROR(f"Skipping {game_id} P{period}: no response.")
                     )
-                else:
-                    boxscore = boxscoretraditionalv3.BoxScoreTraditionalV3(
-                        game_id=game_id,
-                        start_period=period,
-                        end_period=period,
-                    )
-                time.sleep(0.6)
+                    continue
 
                 data = boxscore.get_dict()
                 player_entries = extract_team_players(data)

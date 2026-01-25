@@ -1,14 +1,7 @@
 from django.contrib import admin
-from django.urls import path
-
-from nba_betting import views
+from django.urls import include, path
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/players/", views.PlayerListView.as_view(), name="player-list"),
-    path(
-        "api/predict/manual/",
-        views.ManualPredictionView.as_view(),
-        name="manual-prediction",
-    ),
+    path("api/", include("nba_betting.urls")),
 ]
