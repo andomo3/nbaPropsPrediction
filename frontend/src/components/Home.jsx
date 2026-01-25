@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, TrendingUp, Activity, Target, Shield, Award, BarChart3, Clock, Users, Zap, Check } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import TextType from './TextType';
 
 const STATS = [
     { id: 'PTS', label: 'Points', icon: '🎯' },
@@ -147,18 +148,22 @@ const Home = () => {
     };
 
     return (
-        <div className="max-w-5xl mx-auto px-4 py-12 relative z-10 flex flex-col items-center">
+        <div className="max-w-5xl mx-auto px-4 pt-40 pb-12 relative z-10 flex flex-col items-center">
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center mb-12 w-full max-w-3xl"
             >
-                <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-6 bg-gradient-to-b from-white via-white to-gray-500 bg-clip-text text-transparent">
-                    Predict the Future.
-                </h1>
-                <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed italic">
-                    Wouldn't you like to know?
-                </p>
+                <TextType
+                    as="h1"
+                    text="Predict the Future..."
+                    typingSpeed={60}
+                    pauseDuration={1500}
+                    deletingSpeed={40}
+                    loop={false}
+                    showCursor={false}
+                    className="text-5xl md:text-7xl font-bold tracking-tighter mb-6 bg-gradient-to-b from-white via-white to-gray-500 bg-clip-text text-transparent"
+                />
             </motion.div>
 
             <motion.div
