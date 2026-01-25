@@ -93,6 +93,18 @@ Feature engineering guide:
 docs/ML_FEATURE_GUIDE.md
 ```
 
+## Betting Engine API
+
+Manual prediction:
+```bash
+POST /api/predict/manual/
+{ "player_name": "Jayson Tatum", "stat": "pts", "line": 26.5 }
+```
+
+Environment:
+- `MODEL_DIR` points to XGBoost model JSON files (e.g. `data/models/pts_xgb.json`).
+- `ODDS_API_KEY` enables on-demand odds fetching in `services/odds_api.py`.
+
 ## Frontend (Vite)
 
 ```bash
