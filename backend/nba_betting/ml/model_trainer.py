@@ -137,8 +137,10 @@ class NBADataLoader:
 
         line_col = STAT_TO_LINE_COL[stat]
         target = (self.df[stat] > self.df[line_col]).astype(int)
-        print(f"Target '{stat}': {target.sum():,} over ({target.mean():.1%}), "
-              f"{(~target.astype(bool)).sum():,} under ({1 - target.mean():.1%})")
+        print(
+            f"Target '{stat}': {target.sum():,} over ({target.mean():.1%}), "
+            f"{(~target.astype(bool)).sum():,} under ({1 - target.mean():.1%})"
+        )
         return target
 
     def time_split(
@@ -166,8 +168,12 @@ class NBADataLoader:
         train_dates = train_df["date"]
         test_dates = test_df["date"]
 
-        print(f"Train: {len(train_df):,} rows ({train_dates.min().date()} to {train_dates.max().date()})")
-        print(f"Test:  {len(test_df):,} rows ({test_dates.min().date()} to {test_dates.max().date()})")
+        print(
+            f"Train: {len(train_df):,} rows ({train_dates.min().date()} to {train_dates.max().date()})"
+        )
+        print(
+            f"Test:  {len(test_df):,} rows ({test_dates.min().date()} to {test_dates.max().date()})"
+        )
 
         return train_df, test_df, train_df.index.values, test_df.index.values
 
@@ -278,14 +284,15 @@ class ModelTrainer:
         )
 
         # Extract evaluation history in same format as XGBoost
+        # AUC is not calculated on train by default in CatBoost
+        cat_results = model.get_evals_result()
         evals_result = {
             "train": {
-                "logloss": model.get_evals_result()["learn"]["Logloss"],
-                "auc": model.get_evals_result()["learn"]["AUC"],
+                "logloss": cat_results["learn"]["Logloss"],
             },
             "val": {
-                "logloss": model.get_evals_result()["validation"]["Logloss"],
-                "auc": model.get_evals_result()["validation"]["AUC"],
+                "logloss": cat_results["validation"]["Logloss"],
+                "auc": cat_results["validation"].get("AUC", []),
             },
         }
 
@@ -551,15 +558,16 @@ class ModelTrainer:
             use_best_model=True,
         )
 
-        # Extract evaluation history
+        # Extract evaluation history in same format as XGBoost
+        # AUC is not calculated on train by default in CatBoost
+        cat_results = model.get_evals_result()
         evals_result = {
             "train": {
-                "logloss": model.get_evals_result()["learn"]["Logloss"],
-                "auc": model.get_evals_result()["learn"]["AUC"],
+                "logloss": cat_results["learn"]["Logloss"],
             },
             "val": {
-                "logloss": model.get_evals_result()["validation"]["Logloss"],
-                "auc": model.get_evals_result()["validation"]["AUC"],
+                "logloss": cat_results["validation"]["Logloss"],
+                "auc": cat_results["validation"].get("AUC", []),
             },
         }
 
@@ -655,8 +663,11 @@ class ModelTrainer:
                 serializable_params[stat] = {}
                 for model_type, params in models.items():
                     serializable_params[stat][model_type] = {
-                        k: int(v) if isinstance(v, (np.integer, np.int64)) else
-                           float(v) if isinstance(v, (np.floating, np.float64)) else v
+                        k: int(v)
+                        if isinstance(v, (np.integer, np.int64))
+                        else float(v)
+                        if isinstance(v, (np.floating, np.float64))
+                        else v
                         for k, v in params.items()
                     }
             metadata["best_hyperparameters"] = serializable_params
@@ -702,15 +713,15 @@ def train_all_models(
     # Initialize trainer and visualizer
     trainer = ModelTrainer(model_dir)
     visualizer = TrainingVisualizer(plots_dir) if generate_plots else None
-    
+
     all_metrics = {}
     all_best_params = {} if tune else None
-    
+
     # Store data for combined plots
     all_predictions = {}
 
     for stat in TARGET_STATS:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Training models for: {stat.upper()}")
         if tune:
             print(f"(Hyperparameter tuning enabled: {n_iter} iterations, {cv}-fold CV)")
@@ -758,11 +769,15 @@ def train_all_models(
             trainer.save_catboost(cat_model, stat)
         else:
             # Default training mode (no tuning)
-            xgb_model, xgb_evals = trainer.train_xgboost(X_train, y_train, X_test, y_test, stat)
+            xgb_model, xgb_evals = trainer.train_xgboost(
+                X_train, y_train, X_test, y_test, stat
+            )
             xgb_metrics = trainer.evaluate(xgb_model, X_test, y_test, "xgb", stat)
             trainer.save_xgboost(xgb_model, stat)
 
-            cat_model, cat_evals = trainer.train_catboost(X_train, y_train, X_test, y_test, stat)
+            cat_model, cat_evals = trainer.train_catboost(
+                X_train, y_train, X_test, y_test, stat
+            )
             cat_metrics = trainer.evaluate(cat_model, X_test, y_test, "catboost", stat)
             trainer.save_catboost(cat_model, stat)
 
@@ -779,7 +794,7 @@ def train_all_models(
             dtest = xgb.DMatrix(X_test, feature_names=FEATURE_COLUMNS)
             xgb_probs = xgb_model.predict(dtest)
             cat_probs = cat_model.predict_proba(X_test)[:, 1]
-            
+
             stat_predictions["xgb_prob"] = xgb_probs
             stat_predictions["cat_prob"] = cat_probs
 
@@ -812,11 +827,17 @@ def train_all_models(
             cat_importance = get_catboost_feature_importance(cat_model, FEATURE_COLUMNS)
             visualizer.plot_feature_importance(xgb_importance, stat, "xgb")
             visualizer.plot_feature_importance(cat_importance, stat, "catboost")
-            visualizer.plot_feature_importance_comparison(xgb_importance, cat_importance, stat)
+            visualizer.plot_feature_importance_comparison(
+                xgb_importance, cat_importance, stat
+            )
 
             # 6. Prediction distributions
-            visualizer.plot_prediction_distribution(y_test.values, xgb_probs, stat, "xgb")
-            visualizer.plot_prediction_distribution(y_test.values, cat_probs, stat, "catboost")
+            visualizer.plot_prediction_distribution(
+                y_test.values, xgb_probs, stat, "xgb"
+            )
+            visualizer.plot_prediction_distribution(
+                y_test.values, cat_probs, stat, "catboost"
+            )
 
         all_predictions[stat] = stat_predictions
 
@@ -828,7 +849,7 @@ def train_all_models(
     # Save metadata
     trainer.save_metadata(all_metrics, all_best_params, tuning_enabled=tune)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Training complete!")
     if visualizer:
         print(f"Plots saved to: {plots_dir}")
