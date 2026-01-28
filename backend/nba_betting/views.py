@@ -1,14 +1,12 @@
-import os
-
-import xgboost as xgb
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from scipy.stats import norm
 
+from .ml.predictor import get_predictor
 from .models import Player
 from .services.features import get_model_inputs
-from .services.probability import calculate_probability
 
 
 class PlayerListView(APIView):
@@ -110,17 +108,44 @@ class ManualPredictionView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        model = _load_model(stat)
-        if model is None:
+        # Get classification probability (P of beating rolling average)
+        # Change xgb to catboost for the model type if needed
+        predictor = get_predictor()
+        base_prob = predictor.predict_probability(feature_row_or_error, stat, "xgb")
+        
+        if base_prob is None:
             return Response(
                 {"detail": "Model not found for requested stat."},
                 status=status.HTTP_501_NOT_IMPLEMENTED,
             )
 
-        projection = _predict_projection(model, feature_row_or_error)
-        probability_over = calculate_probability(stat, projection, line_value)
+        # Get the player's rolling average for this stat (the baseline)
+        stat_key = stat.lower().strip()
+        rolling_avg_col = f"{stat_key}_L5"
+        if rolling_avg_col in feature_row_or_error.columns:
+            rolling_avg = float(feature_row_or_error[rolling_avg_col].iloc[0])
+        else:
+            rolling_avg = line_value  # Fallback
+
+        # Get standard deviation for adjustment
+        std_col = f"{stat_key}_std_L10" if stat_key == "pts" else None
+        if std_col and std_col in feature_row_or_error.columns:
+            std_dev = float(feature_row_or_error[std_col].iloc[0])
+        else:
+            # Default std dev estimates based on stat type
+            std_dev = {"pts": 8.0, "reb": 3.0, "ast": 2.5}.get(stat_key, 5.0)
+
+        # Adjust probability based on line difference from rolling average
+        # If user_line > rolling_avg, probability of over decreases
+        # If user_line < rolling_avg, probability of over increases
+        probability_over = _adjust_probability_for_line(
+            base_prob, rolling_avg, line_value, std_dev
+        )
         probability_under = float(1.0 - probability_over)
         edge = "Over" if probability_over >= 0.5 else "Under"
+
+        # Use rolling average as the projection (expected value)
+        projection = rolling_avg
 
         return Response(
             {
@@ -135,26 +160,54 @@ class ManualPredictionView(APIView):
         )
 
 
-def _load_model(stat):
-    stat_key = (stat or "").lower().strip()
-    if not stat_key:
-        return None
+def _adjust_probability_for_line(base_prob, rolling_avg, user_line, std_dev):
+    """
+    Adjust the base probability based on the difference between
+    the user's line and the player's rolling average.
 
-    model_dir = os.getenv("MODEL_DIR") or os.path.join("data", "models")
-    candidates = [
-        os.path.join(model_dir, f"{stat_key}_xgb.json"),
-        os.path.join(model_dir, f"{stat_key}.json"),
-    ]
-    model_path = next((path for path in candidates if os.path.exists(path)), None)
-    if not model_path:
-        return None
+    The model predicts P(actual > rolling_avg). We need P(actual > user_line).
 
-    model = xgb.Booster()
-    model.load_model(model_path)
-    return model
+    Uses a normal distribution adjustment:
+    - If user_line == rolling_avg, return base_prob
+    - If user_line > rolling_avg, return lower probability
+    - If user_line < rolling_avg, return higher probability
 
+    Args:
+        base_prob: Model's P(over rolling_avg)
+        rolling_avg: Player's rolling average (the model's baseline)
+        user_line: The user's betting line
+        std_dev: Estimated standard deviation of the stat
 
-def _predict_projection(model, feature_row):
-    dmatrix = xgb.DMatrix(feature_row, feature_names=feature_row.columns.tolist())
-    prediction = model.predict(dmatrix)
-    return float(prediction[0])
+    Returns:
+        Adjusted probability of going over the user's line
+    """
+    if std_dev <= 0:
+        std_dev = 1.0
+
+    # Calculate the line difference in standard deviations
+    line_diff = user_line - rolling_avg
+    z_adjustment = line_diff / std_dev
+
+    # Convert base probability to z-score, adjust, and convert back
+    # base_prob = P(X > rolling_avg) = 1 - Phi(0) if centered
+    # We need P(X > user_line) = 1 - Phi(z_adjustment)
+
+    # Use the base probability to infer the player's "form factor"
+    # Then adjust for the line difference
+    if base_prob >= 0.9999:
+        base_z = 3.5
+    elif base_prob <= 0.0001:
+        base_z = -3.5
+    else:
+        # base_prob = P(X > avg) = P(Z > 0 + form_factor)
+        # So form_factor = inverse_norm(base_prob) for the "over" side
+        base_z = norm.ppf(base_prob)
+
+    # Adjusted z-score accounts for line being different from average
+    adjusted_z = base_z - z_adjustment
+
+    # Convert back to probability
+    adjusted_prob = float(norm.cdf(adjusted_z))
+
+    # Clamp to valid probability range
+    return max(0.01, min(0.99, adjusted_prob))
