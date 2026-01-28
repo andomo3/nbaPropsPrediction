@@ -9,7 +9,6 @@ Usage:
     python manage.py train_models --no-plots  # Skip plot generation
 """
 
-import os
 from pathlib import Path
 
 from django.core.management.base import BaseCommand

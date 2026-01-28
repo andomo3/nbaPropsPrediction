@@ -6,10 +6,9 @@ Trains binary classifiers to predict over/under outcomes for player props
 """
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -21,7 +20,6 @@ from sklearn.metrics import (
     accuracy_score,
     brier_score_loss,
     log_loss,
-    make_scorer,
     roc_auc_score,
 )
 from sklearn.model_selection import RandomizedSearchCV
@@ -357,7 +355,7 @@ class ModelTrainer:
         best_score = search.best_score_
 
         print(f"\n  Best CV AUC-ROC: {best_score:.4f}")
-        print(f"  Best parameters:")
+        print(f"  Best parameters:")  # noqa: F541
         for param, value in best_params.items():
             print(f"    {param}: {value}")
 
@@ -437,7 +435,7 @@ class ModelTrainer:
             best_score = 0.0
 
         print(f"\n  Best CV AUC: {best_score:.4f}")
-        print(f"  Best parameters:")
+        print(f"  Best parameters:")  # noqa: F541
         for param, value in best_params.items():
             print(f"    {param}: {value}")
 
@@ -843,7 +841,7 @@ def train_all_models(
 
     # Generate summary plot across all stats
     if visualizer:
-        print(f"\nGenerating summary plots...")
+        print(f"\nGenerating summary plots...")  # noqa: F541
         visualizer.plot_metrics_summary(all_metrics)
 
     # Save metadata
