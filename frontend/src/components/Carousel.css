@@ -1,0 +1,109 @@
+.carousel-container {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 16px;
+  background: var(--card);
+  --outer-r: 16px;
+  --p-distance: 12px;
+}
+
+.carousel-track {
+  display: flex;
+}
+
+.carousel-item {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--outer-r) - var(--p-distance));
+  background-color: var(--secondary);
+  overflow: hidden;
+  cursor: grab;
+  padding: 20px;
+  min-height: 240px;
+}
+
+.carousel-item:active {
+  cursor: grabbing;
+}
+
+.carousel-item-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.carousel-image {
+  width: 100%;
+  height: 140px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  margin: 8px 0 12px;
+  object-fit: cover;
+  display: block;
+}
+
+
+.carousel-item-title {
+  margin-bottom: 4px;
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--foreground);
+  text-align: center;
+}
+
+.carousel-item-role {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  text-align: center;
+}
+
+.carousel-item-description {
+  font-size: 14px;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+
+.carousel-indicators-container {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+
+.carousel-indicators {
+  margin-top: 16px;
+  display: flex;
+  width: 160px;
+  justify-content: space-between;
+  padding: 0 32px;
+}
+
+.carousel-indicator {
+  height: 8px;
+  width: 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color 150ms, transform 150ms;
+}
+
+.carousel-indicator.active {
+  background-color: var(--primary);
+}
+
+.carousel-indicator.inactive {
+  background-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+}

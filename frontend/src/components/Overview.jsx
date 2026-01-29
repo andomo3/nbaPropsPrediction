@@ -1,55 +1,66 @@
-import React from 'react';
+﻿import React from 'react';
 import { motion } from 'framer-motion';
 import TextType from './TextType';
 
 const Overview = () => {
     return (
-        <div className="max-w-4xl mx-auto px-4 py-40 relative z-10">
+        <div>
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-center mb-12"
+                className="text-center mb-32"
             >
                 <TextType
+                    text="How It Works"
                     as="h1"
-                    text="Platform Overview"
+                    className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground text-balance"
                     typingSpeed={60}
                     pauseDuration={1200}
                     deletingSpeed={40}
                     loop={false}
                     showCursor={false}
-                    className="text-4xl md:text-5xl font-bold tracking-tighter mb-4 bg-gradient-to-b from-white via-white to-gray-500 bg-clip-text text-transparent"
+                    cursorCharacter="|"
                 />
-                <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-                    Understanding how our predictive models work.
+                <p className="text-base text-muted-foreground leading-relaxed max-w-2xl mx-auto mt-4">
+                    Understand the pipeline behind PropEdge — from data ingestion to scenario-based predictions.
                 </p>
             </motion.div>
 
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.1 }}
-                className="w-full backdrop-blur-xl shadow-xl rounded-2xl p-8 bg-zinc-900/20 border border-white/5"
-            >
-                <div className="space-y-6 text-gray-300">
-                    <p>
-                        Prop-Predictor is a state-of-the-art sports analytics platform designed to give bettors an edge. We leverage machine learning to analyze historical player performance, matchup data, and real-time game conditions.
-                    </p>
-
-                    <div className="grid md:grid-cols-2 gap-6 mt-8">
-                        <div className="bg-black/20 p-6 rounded-xl border border-white/5">
-                            <h3 className="text-xl font-bold text-white mb-2">Data Aggregation</h3>
-                            <p className="text-sm">We process thousands of data points from every game, including advanced metrics that go beyond the box score.</p>
-                        </div>
-                        <div className="bg-black/20 p-6 rounded-xl border border-white/5">
-                            <h3 className="text-xl font-bold text-white mb-2">Predictive Modeling</h3>
-                            <p className="text-sm">Our proprietary algorithms calculate hit probabilities for player props, identifying value where the sportsbooks might have missed it.</p>
-                        </div>
+            <section className="grid gap-8 md:grid-cols-3 max-w-4xl mx-auto mb-32">
+                {[
+                    {
+                        title: 'Data Ingestion',
+                        body: 'We normalize historical box scores and enrich them with context-driven features.',
+                    },
+                    {
+                        title: 'Feature Engineering',
+                        body: 'Rolling averages, EMA momentum, and opponent defense signals power the model inputs.',
+                    },
+                    {
+                        title: 'Scenario Engine',
+                        body: 'You provide opponent, home/away, and line — the model returns a probability edge.',
+                    },
+                ].map((card) => (
+                    <div key={card.title} className="rounded-2xl border border-border bg-card p-6 md:p-8">
+                        <h3 className="text-xl font-semibold text-foreground">{card.title}</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">{card.body}</p>
                     </div>
+                ))}
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-6 md:p-8">
+                <div className="mb-10">
+                    <h2 className="text-xl font-semibold text-foreground mb-1">Prediction Outputs</h2>
+                    <p className="text-sm text-muted-foreground">What the model returns</p>
                 </div>
-            </motion.div>
+                <p className="text-base text-muted-foreground leading-relaxed">
+                    The platform highlights projection, probability, and edge. Historical performance and matchup trends
+                    help you validate the model’s reasoning before placing a bet.
+                </p>
+            </section>
         </div>
     );
 };
 
 export default Overview;
+
