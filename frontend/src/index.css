@@ -1,9 +1,35 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --background: oklch(0.07 0.01 260);
+    --foreground: oklch(0.95 0 0);
+    --card: oklch(0.1 0.015 260);
+    --primary: oklch(0.75 0.15 195);
+    --secondary: oklch(0.15 0.01 260);
+    --muted-foreground: oklch(0.6 0 0);
+    --border: oklch(0.2 0.015 260);
+    --input: oklch(0.12 0.01 260);
+    --chart-1: oklch(0.75 0.15 195);
+    --chart-2: oklch(0.7 0.12 220);
+    --chart-3: oklch(0.8 0.15 165);
+    --chart-4: oklch(0.6 0.2 25);
+    --primary-foreground: var(--background);
+    --secondary-foreground: var(--foreground);
+    --popover: var(--card);
+    --popover-foreground: var(--foreground);
+    --accent: var(--secondary);
+    --accent-foreground: var(--foreground);
+    --muted: var(--secondary);
+    --destructive: var(--chart-4);
+    --destructive-foreground: var(--foreground);
+    --ring: var(--primary);
+    --radius: 0.5rem;
+  }
+
   * {
     margin: 0;
     padding: 0;
@@ -11,23 +37,20 @@
   }
 
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #09090b;
-    /* zinc-950 */
-    color: #fff;
+    background-color: var(--background);
+    color: var(--foreground);
     overflow-x: hidden;
   }
-}
 
-@layer utilities {
-  .glass-panel {
-    @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-xl;
+  * {
+    @apply border-border;
   }
 
-  .glass-input {
-    @apply bg-white/5 border border-white/10 text-white placeholder-white/30 transition-all duration-300 focus:bg-white/10 focus:border-electric-blue/50 focus:shadow-[0_0_20px_rgba(0, 217, 255, 0.15)] outline-none;
+  body {
+    @apply bg-background text-foreground;
   }
 }
 
@@ -37,18 +60,14 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: var(--background);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: oklch(0.2 0.015 260);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
-}
-
-.mb-12 {
-  margin-bottom: none;
+  background: oklch(0.25 0.02 260);
 }
