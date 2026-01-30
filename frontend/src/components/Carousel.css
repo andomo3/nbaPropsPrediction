@@ -2,10 +2,10 @@
   position: relative;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 1rem;
-  padding: 16px;
+  border-radius: 1.5rem;
+  padding: 24px;
   background: var(--card);
-  --outer-r: 16px;
+  --outer-r: 24px;
   --p-distance: 12px;
 }
 
@@ -25,8 +25,8 @@
   background-color: var(--secondary);
   overflow: hidden;
   cursor: grab;
-  padding: 20px;
-  min-height: 240px;
+  padding: 24px;
+  min-height: 300px;
 }
 
 .carousel-item:active {
@@ -45,8 +45,8 @@
 
 .carousel-image {
   width: 100%;
-  height: 140px;
-  border-radius: 16px;
+  height: 180px;
+  border-radius: 20px;
   border: 1px solid var(--border);
   background: color-mix(in oklch, var(--primary) 12%, transparent);
   margin: 8px 0 12px;
@@ -58,13 +58,13 @@
 .carousel-item-title {
   margin-bottom: 4px;
   font-weight: 600;
-  font-size: 18px;
+  font-size: 22px;
   color: var(--foreground);
   text-align: center;
 }
 
 .carousel-item-role {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted-foreground);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -73,7 +73,7 @@
 }
 
 .carousel-item-description {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--muted-foreground);
   line-height: 1.6;
 }

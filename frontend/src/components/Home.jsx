@@ -122,7 +122,7 @@ const Home = () => {
                     pauseDuration={1200}
                     deletingSpeed={40}
                     loop={false}
-                    showCursor={false}
+                    showCursor
                     cursorCharacter="|"
                 />
                 <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto text-pretty leading-relaxed mt-6">
