@@ -1,33 +1,36 @@
 import React from 'react';
 import Carousel from './Carousel';
+import abbaFounder from '../assets/Abba_founder.png';
+import husaamFounder from '../assets/Husaam_founder.png';
+import patelFounder from '../assets/Patel_founder.png';
 
 const TEAM = [
     {
-        name: 'Alex Johnson',
-        role: 'Founder · Data Science',
+        name: 'Abba Ndomo',
+        role: 'Founder · Data Engineering & Backend',
         bio: 'Shapes the modeling strategy and feature pipelines that drive PropEdge.',
-        image: 'https://placehold.co/480x320/png?text=Alex+Johnson',
+        image: abbaFounder,
     },
     {
-        name: 'Maya Chen',
-        role: 'Founder · ML Engineering',
+        name: 'Husaam Idris',
+        role: 'Founder · Machine Learning Developer',
         bio: 'Owns training infrastructure, monitoring, and model evaluation workflows.',
-        image: 'https://placehold.co/480x320/png?text=Maya+Chen',
+        image: husaamFounder,
     },
     {
-        name: 'Jordan Lee',
-        role: 'Founder · Backend',
+        name: 'Patel',
+        role: 'Founder · Frontend',
         bio: 'Designs the APIs and data ingestion services that fuel predictions.',
-        image: 'https://placehold.co/480x320/png?text=Jordan+Lee',
+        image: patelFounder,
     },
 ];
 
 const TeamSection = () => {
     return (
-        <section className="mb-32">
-            <div className="mb-10">
-                <h3 className="text-2xl md:text-3xl font-bold text-foreground">Meet the Team</h3>
-                <p className="text-base text-muted-foreground leading-relaxed">
+        <section className="mb-20 md:mb-24">
+            <div className="mb-8">
+                <h3 className="text-3xl md:text-4xl font-bold text-foreground">Meet the Team</h3>
+                <p className="text-lg text-muted-foreground leading-relaxed">
                     A focused group of engineers and analysts building a smarter props engine.
                 </p>
             </div>
@@ -43,7 +46,7 @@ const TeamSection = () => {
                             .slice(0, 2)
                             .toUpperCase(),
                     }))}
-                    baseWidth={360}
+                    baseWidth={420}
                     autoplay
                     autoplayDelay={3500}
                     pauseOnHover

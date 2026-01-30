@@ -1,8 +1,9 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+﻿import { useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { gsap } from 'gsap';
 import './CardNav.css';
+import logo from '../assets/perchave_final.png';
 
 const CardNav = ({
     logoText = 'PropEdge',
@@ -18,44 +19,40 @@ const CardNav = ({
 
     const calculateHeight = () => {
         const navEl = navRef.current;
-        if (!navEl) return 260;
+        if (!navEl) return 300;
 
-        const isMobile = window.matchMedia('(max-width: 768px)').matches;
-        if (isMobile) {
-            const contentEl = navEl.querySelector('.card-nav-content');
-            if (contentEl) {
-                const wasVisible = contentEl.style.visibility;
-                const wasPointerEvents = contentEl.style.pointerEvents;
-                const wasPosition = contentEl.style.position;
-                const wasHeight = contentEl.style.height;
+        const contentEl = navEl.querySelector('.card-nav-content');
+        if (!contentEl) return 300;
 
-                contentEl.style.visibility = 'visible';
-                contentEl.style.pointerEvents = 'auto';
-                contentEl.style.position = 'static';
-                contentEl.style.height = 'auto';
+        const wasVisible = contentEl.style.visibility;
+        const wasPointerEvents = contentEl.style.pointerEvents;
+        const wasPosition = contentEl.style.position;
+        const wasHeight = contentEl.style.height;
 
-                contentEl.offsetHeight;
+        contentEl.style.visibility = 'visible';
+        contentEl.style.pointerEvents = 'auto';
+        contentEl.style.position = 'static';
+        contentEl.style.height = 'auto';
 
-                const topBar = 60;
-                const padding = 16;
-                const contentHeight = contentEl.scrollHeight;
+        contentEl.offsetHeight;
 
-                contentEl.style.visibility = wasVisible;
-                contentEl.style.pointerEvents = wasPointerEvents;
-                contentEl.style.position = wasPosition;
-                contentEl.style.height = wasHeight;
+        const topBar = 104;
+        const padding = 16;
+        const contentHeight = contentEl.scrollHeight;
 
-                return topBar + contentHeight + padding;
-            }
-        }
-        return 260;
+        contentEl.style.visibility = wasVisible;
+        contentEl.style.pointerEvents = wasPointerEvents;
+        contentEl.style.position = wasPosition;
+        contentEl.style.height = wasHeight;
+
+        return topBar + contentHeight + padding;
     };
 
     const createTimeline = () => {
         const navEl = navRef.current;
         if (!navEl) return null;
 
-        gsap.set(navEl, { height: 60, overflow: 'hidden' });
+        gsap.set(navEl, { height: 104, overflow: 'hidden' });
         gsap.set(cardsRef.current, { y: 50, opacity: 0 });
 
         const tl = gsap.timeline({ paused: true });
@@ -142,8 +139,8 @@ const CardNav = ({
                     </div>
 
                     <div className="logo-container">
-                        <Link to="/" className="text-lg font-semibold text-foreground tracking-tight">
-                            {logoText}
+                        <Link to="/" className="inline-flex items-center">
+                            <img src={logo} alt={`${logoText} logo`} className="logo" />
                         </Link>
                     </div>
 

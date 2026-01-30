@@ -69,10 +69,10 @@ const PredictionForm = ({
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid gap-5 md:grid-cols-2">
-                <div className="space-y-2 relative">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Player</Label>
+        <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="grid gap-6 md:gap-8 md:grid-cols-2">
+                <div className="space-y-3 relative">
+                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Player</Label>
                     <Input
                         value={playerQuery}
                         onChange={(e) => {
@@ -83,7 +83,7 @@ const PredictionForm = ({
                         }}
                         onFocus={() => setPlayerOpen(true)}
                         onBlur={() => setTimeout(() => setPlayerOpen(false), 120)}
-                        className="h-11 bg-input border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:ring-1 focus:ring-primary/20"
+                        className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:ring-2 focus:ring-primary/20"
                         placeholder="Search player"
                         autoComplete="off"
                     />
@@ -106,95 +106,95 @@ const PredictionForm = ({
                                     </button>
                                 ))
                             ) : (
-                                <div className="px-3 py-2 text-sm text-muted-foreground">No matches</div>
+                                <div className="px-3 py-2 text-base text-muted-foreground">No matches</div>
                             )}
                         </div>
                     )}
                     {fieldErrors.playerName && (
-                        <p className="text-xs text-muted-foreground">{fieldErrors.playerName}</p>
+                        <p className="text-sm text-muted-foreground">{fieldErrors.playerName}</p>
                     )}
                 </div>
-                <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Opponent</Label>
+                <div className="space-y-3">
+                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Opponent</Label>
                     <Select value={opponent} onValueChange={setOpponent}>
-                        <SelectTrigger className="h-11 bg-input border-border text-foreground">
+                        <SelectTrigger className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground">
                             <SelectValue placeholder="Select opponent" />
                         </SelectTrigger>
-                    <SelectContent className="bg-popover border-border">
+                    <SelectContent className="bg-popover border-border rounded-xl">
                         {teamOptions.map((team) => (
-                            <SelectItem key={team} value={team} className="text-popover-foreground">
+                            <SelectItem key={team} value={team} className="text-base text-popover-foreground py-3">
                                 {team}
                             </SelectItem>
                         ))}
                     </SelectContent>
                     </Select>
                     {fieldErrors.opponent && (
-                        <p className="text-xs text-muted-foreground">{fieldErrors.opponent}</p>
+                        <p className="text-sm text-muted-foreground">{fieldErrors.opponent}</p>
                     )}
                 </div>
             </div>
 
-            <div className="grid gap-5 md:grid-cols-2">
-                <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Prop Type</Label>
+            <div className="grid gap-6 md:gap-8 md:grid-cols-2">
+                <div className="space-y-3">
+                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Prop Type</Label>
                     <Select value={stat} onValueChange={setStat}>
-                        <SelectTrigger className="h-11 bg-input border-border text-foreground">
+                        <SelectTrigger className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground">
                             <SelectValue placeholder="Select prop" />
                         </SelectTrigger>
-                    <SelectContent className="bg-popover border-border">
+                    <SelectContent className="bg-popover border-border rounded-xl">
                         {PROP_TYPES.map((prop) => (
-                            <SelectItem key={prop.value} value={prop.value} className="text-popover-foreground">
+                            <SelectItem key={prop.value} value={prop.value} className="text-base text-popover-foreground py-3">
                                 {prop.label}
                             </SelectItem>
                         ))}
                     </SelectContent>
                     </Select>
                     {fieldErrors.stat && (
-                        <p className="text-xs text-muted-foreground">{fieldErrors.stat}</p>
+                        <p className="text-sm text-muted-foreground">{fieldErrors.stat}</p>
                     )}
                 </div>
-                <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Line</Label>
+                <div className="space-y-3">
+                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Line</Label>
                     <Input
                         type="number"
                         step="0.5"
                         value={line}
                         onChange={(e) => setLine(e.target.value)}
-                        className="h-11 bg-input border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:ring-1 focus:ring-primary/20"
+                        className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:ring-2 focus:ring-primary/20"
                         placeholder="25.5"
                     />
                     {fieldErrors.line && (
-                        <p className="text-xs text-muted-foreground">{fieldErrors.line}</p>
+                        <p className="text-sm text-muted-foreground">{fieldErrors.line}</p>
                     )}
                 </div>
             </div>
 
-            <div className="grid gap-5 md:grid-cols-2">
-                <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Days Rest</Label>
+            <div className="grid gap-6 md:gap-8 md:grid-cols-2">
+                <div className="space-y-3">
+                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Days Rest</Label>
                     <Input
                         type="number"
                         min="0"
                         max="7"
                         value={daysRest}
                         onChange={(e) => setDaysRest(e.target.value)}
-                        className="h-11 bg-input border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:ring-1 focus:ring-primary/20"
+                        className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:ring-2 focus:ring-primary/20"
                     />
                 </div>
-                <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Fixture</Label>
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary text-sm">
+                <div className="space-y-3">
+                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Fixture</Label>
+                    <div className="flex items-center gap-2 h-12 md:h-14 bg-input border border-border rounded-xl px-2">
                         <button
                             type="button"
                             onClick={() => setIsHome(true)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${isHome ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+                            className={`flex-1 h-10 md:h-12 rounded-xl text-sm font-medium ${isHome ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
                         >
                             Home
                         </button>
                         <button
                             type="button"
                             onClick={() => setIsHome(false)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${!isHome ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+                            className={`flex-1 h-10 md:h-12 rounded-xl text-sm font-medium ${!isHome ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
                         >
                             Away
                         </button>
@@ -203,17 +203,17 @@ const PredictionForm = ({
             </div>
 
             {error && (
-                <p className="text-xs text-muted-foreground">{error}</p>
+                <p className="text-sm text-muted-foreground">{error}</p>
             )}
 
             <Button
                 size="lg"
-                className="w-full h-12 text-sm font-medium tracking-wide"
+                className="w-full h-14 md:h-16 text-base font-semibold tracking-wide rounded-xl"
                 type="submit"
                 disabled={loading}
             >
                 {loading ? 'Running Scenario...' : 'Run Prediction'}
-                <ArrowRight className="ml-2 h-4 w-4" />
+                <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
         </form>
     );
