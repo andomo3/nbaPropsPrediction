@@ -1,15 +1,15 @@
-﻿import React from 'react';
-import { motion } from 'framer-motion';
-import TextType from './TextType';
+import React from 'react';
 import HowItWorks from './HowItWorks';
+import { PageTransition } from './page-transition';
 
 const Overview = () => {
     return (
-        <div>
-            <HowItWorks />
-        </div>
+        <PageTransition>
+            <div>
+                <HowItWorks />
+            </div>
+        </PageTransition>
     );
 };
 
 export default Overview;
-

@@ -8,6 +8,7 @@ import {
     Target,
 } from 'lucide-react';
 import TextType from './TextType';
+import { StaggerChildren } from './page-transition';
 
 const FEATURES = [
     {
@@ -79,7 +80,7 @@ const HowItWorks = () => {
                     </p>
                 </div>
 
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                <StaggerChildren className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8" staggerDelay={100}>
                     {FEATURES.map((feature, index) => (
                         <div
                             key={index}
@@ -110,7 +111,7 @@ const HowItWorks = () => {
                             </div>
                         </div>
                     ))}
-                </div>
+                </StaggerChildren>
             </div>
         </section>
     );

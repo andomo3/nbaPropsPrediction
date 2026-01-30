@@ -26,6 +26,7 @@ const PredictionForm = ({
     onSubmit,
     loading,
     error,
+    lastPayload,
 }) => {
     const [playerName, setPlayerName] = useState('');
     const [playerQuery, setPlayerQuery] = useState('');
@@ -68,11 +69,24 @@ const PredictionForm = ({
         });
     };
 
+    const currentPayload = {
+        player_name: playerName.trim(),
+        stat,
+        line: line === '' ? '' : Number(line),
+        opponent,
+        is_home: isHome,
+        days_rest: Number(daysRest) || 2,
+    };
+
+    const isSameAsLast =
+        lastPayload &&
+        JSON.stringify(lastPayload) === JSON.stringify(currentPayload);
+
     return (
         <form onSubmit={handleSubmit} className="space-y-8">
             <div className="grid gap-6 md:gap-8 md:grid-cols-2">
                 <div className="space-y-3 relative">
-                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Player</Label>
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Player</Label>
                     <Input
                         value={playerQuery}
                         onChange={(e) => {
@@ -115,7 +129,7 @@ const PredictionForm = ({
                     )}
                 </div>
                 <div className="space-y-3">
-                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Opponent</Label>
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Opponent</Label>
                     <Select value={opponent} onValueChange={setOpponent}>
                         <SelectTrigger className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground">
                             <SelectValue placeholder="Select opponent" />
@@ -136,7 +150,7 @@ const PredictionForm = ({
 
             <div className="grid gap-6 md:gap-8 md:grid-cols-2">
                 <div className="space-y-3">
-                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Prop Type</Label>
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Prop Type</Label>
                     <Select value={stat} onValueChange={setStat}>
                         <SelectTrigger className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground">
                             <SelectValue placeholder="Select prop" />
@@ -154,7 +168,7 @@ const PredictionForm = ({
                     )}
                 </div>
                 <div className="space-y-3">
-                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Line</Label>
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Line</Label>
                     <Input
                         type="number"
                         step="0.5"
@@ -171,7 +185,7 @@ const PredictionForm = ({
 
             <div className="grid gap-6 md:gap-8 md:grid-cols-2">
                 <div className="space-y-3">
-                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Days Rest</Label>
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Days Rest</Label>
                     <Input
                         type="number"
                         min="0"
@@ -182,7 +196,7 @@ const PredictionForm = ({
                     />
                 </div>
                 <div className="space-y-3">
-                    <Label className="text-sm text-muted-foreground uppercase tracking-wider font-medium">Fixture</Label>
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Fixture</Label>
                     <div className="flex items-center gap-2 h-12 md:h-14 bg-input border border-border rounded-xl px-2">
                         <button
                             type="button"
@@ -210,11 +224,16 @@ const PredictionForm = ({
                 size="lg"
                 className="w-full h-14 md:h-16 text-base font-semibold tracking-wide rounded-xl"
                 type="submit"
-                disabled={loading}
+                disabled={loading || isSameAsLast}
             >
                 {loading ? 'Running Scenario...' : 'Run Prediction'}
                 <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
+            {isSameAsLast && !loading && (
+                <p className="text-sm text-muted-foreground">
+                    Update an input to run a new prediction.
+                </p>
+            )}
         </form>
     );
 };

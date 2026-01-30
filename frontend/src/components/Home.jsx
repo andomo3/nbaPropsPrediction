@@ -3,6 +3,8 @@ import PredictionForm from './PredictionForm';
 import PredictionResults from './PredictionResults';
 import TeamSection from './TeamSection';
 import TextType from './TextType';
+import PredictionLoading from './prediction-loading';
+import { FadeIn, PageTransition } from './page-transition';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
@@ -40,7 +42,8 @@ const mockFactors = (stat) => ([
 ]);
 
 const buildMockResult = (apiResult) => {
-    const projection = apiResult.projection ?? 0;
+    const projection = Number(apiResult.projection ?? 0);
+    const probabilityOver = Number(apiResult.probability_over ?? 0.5);
     const historicalGames = Array.from({ length: 10 }, (_, idx) => ({
         game: `G-${idx + 1}`,
         value: Number((projection + (Math.random() * 8 - 4)).toFixed(1)),
@@ -54,14 +57,14 @@ const buildMockResult = (apiResult) => {
         stat: apiResult.stat,
         line: apiResult.line,
         prediction: apiResult.edge?.toUpperCase() === 'OVER' ? 'OVER' : 'UNDER',
-        confidence: Math.round((apiResult.probability_over ?? 0.5) * 100),
-        probability: apiResult.probability_over ?? 0.5,
+        confidence: Math.round(probabilityOver * 100),
+        probability: probabilityOver,
         projection,
         historicalGames,
         h2hStats: {
             gamesPlayed: 6,
             average: Number(avg.toFixed(1)),
-            hitRate: Math.round((apiResult.probability_over ?? 0.5) * 100),
+            hitRate: Math.round(probabilityOver * 100),
         },
         distribution: mockDistribution(projection),
         factors: mockFactors(apiResult.stat || 'pts'),
@@ -74,6 +77,8 @@ const Home = () => {
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [lastPayload, setLastPayload] = useState(null);
+    const [loadingDuration, setLoadingDuration] = useState(6000);
 
     useEffect(() => {
         const loadOptions = async () => {
@@ -94,11 +99,17 @@ const Home = () => {
         setError('');
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/api/predict/manual/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
+            setLastPayload(payload);
+            const duration = Math.floor(3000 + Math.random() * 2000);
+            setLoadingDuration(duration);
+            const [res] = await Promise.all([
+                fetch(`${API_BASE}/api/predict/manual/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                }),
+                new Promise((resolve) => setTimeout(resolve, duration)),
+            ]);
             const data = await res.json();
             if (!res.ok) {
                 throw new Error(data.detail || 'Prediction failed');
@@ -112,46 +123,55 @@ const Home = () => {
     };
 
     return (
-        <div>
-            <section className="mt-12 mb-20 md:mb-28 text-center max-w-4xl mx-auto">
-                <TextType
-                    text="Prop Predictions"
-                    as="h1"
-                    className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground text-balance"
-                    typingSpeed={60}
-                    pauseDuration={1200}
-                    deletingSpeed={40}
-                    loop={false}
-                    showCursor
-                    cursorCharacter="|"
-                />
-                <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto text-pretty leading-relaxed mt-6">
-                    Simulate a custom betting scenario by selecting a player, opponent, and line.
-                </p>
-            </section>
+        <PageTransition>
+            {loading && <PredictionLoading duration={loadingDuration} />}
+            <div>
+                <FadeIn direction="none">
+                    <section className="mt-12 mb-20 md:mb-28 text-center max-w-4xl mx-auto">
+                        <TextType
+                            text="Prop Predictions"
+                            as="h1"
+                            className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground text-balance"
+                            typingSpeed={60}
+                            pauseDuration={1200}
+                            deletingSpeed={40}
+                            loop={false}
+                            showCursor
+                            cursorCharacter="|"
+                        />
+                        <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto text-pretty leading-relaxed mt-6">
+                            Simulate a custom betting scenario by selecting a player, opponent, and line.
+                        </p>
+                    </section>
+                </FadeIn>
 
-            <section id="predictions" className="grid gap-8 md:gap-10 mb-20 md:mb-24 w-full">
-                <div className="rounded-3xl border border-border bg-card p-8 md:p-10 lg:p-12 space-y-8">
-                    <div className="mb-8">
-                        <h2 className="text-3xl md:text-4xl font-semibold text-foreground mb-2">Prediction Inputs</h2>
-                        {/* <p className="text-sm text-muted-foreground">Provide the scenario context and run a prediction.</p> */}
-                    </div>
+                <FadeIn delay={150}>
+                    <section id="predictions" className="grid gap-8 md:gap-10 mb-20 md:mb-24 w-full">
+                        <div className="rounded-3xl border border-border bg-card p-8 md:p-10 lg:p-12 space-y-8">
+                            <div className="mb-8">
+                                <h2 className="text-3xl md:text-4xl font-semibold text-foreground mb-2">Prediction Inputs</h2>
+                            </div>
                     <PredictionForm
                         players={players}
                         teams={teams}
                         onSubmit={handleSubmit}
                         loading={loading}
                         error={error}
+                        lastPayload={lastPayload}
                     />
                 </div>
 
-                <div className="space-y-6">
-                    <PredictionResults result={result} />
-                </div>
-            </section>
+                        <div className="space-y-6">
+                            <PredictionResults result={result} />
+                        </div>
+                    </section>
+                </FadeIn>
 
-            <TeamSection />
-        </div>
+                <FadeIn delay={250}>
+                    <TeamSection />
+                </FadeIn>
+            </div>
+        </PageTransition>
     );
 };
 
