@@ -7,19 +7,19 @@ import patelFounder from '../assets/Patel_founder.png';
 const TEAM = [
     {
         name: 'Abba Ndomo',
-        role: 'Founder · Data Engineering & Backend',
+        role: 'Founder · Data Engineer, Data Scientist & Backend Developer',
         bio: 'Shapes the modeling strategy and feature pipelines that drive PropEdge.',
         image: abbaFounder,
     },
     {
         name: 'Husaam Idris',
-        role: 'Founder · Machine Learning Developer',
+        role: 'Founder · Machine Learning Engineer',
         bio: 'Owns training infrastructure, monitoring, and model evaluation workflows.',
         image: husaamFounder,
     },
     {
         name: 'Patel',
-        role: 'Founder · Frontend',
+        role: 'Founder · Frontend Developer',
         bio: 'Designs the APIs and data ingestion services that fuel predictions.',
         image: patelFounder,
     },

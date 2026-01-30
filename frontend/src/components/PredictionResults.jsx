@@ -164,7 +164,7 @@ const PredictionResults = ({ result }) => {
                                         <TrendingUp className="h-4 w-4 text-primary" />
                                         <span className="text-base font-medium text-foreground">{item.factor}</span>
                                     </div>
-                                    <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+                                    <p className="text-sm text-muted-foreground leading-relaxed text-left">{item.description}</p>
                                 </div>
                             );
                         }
@@ -175,7 +175,7 @@ const PredictionResults = ({ result }) => {
                                         <TrendingDown className="h-4 w-4 text-destructive" />
                                         <span className="text-base font-medium text-foreground">{item.factor}</span>
                                     </div>
-                                    <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+                                    <p className="text-sm text-muted-foreground leading-relaxed text-left">{item.description}</p>
                                 </div>
                             );
                         }
@@ -185,7 +185,7 @@ const PredictionResults = ({ result }) => {
                                     <TrendingDown className="h-4 w-4 text-muted-foreground" />
                                     <span className="text-base font-medium text-foreground">{item.factor}</span>
                                 </div>
-                                <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+                                <p className="text-sm text-muted-foreground leading-relaxed text-left">{item.description}</p>
                             </div>
                         );
                     })}
