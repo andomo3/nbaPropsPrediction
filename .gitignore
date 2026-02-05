@@ -35,3 +35,6 @@ __pycache__/
 # Next.js
 .next/
 out/
+
+# Data
+/data/raw/
