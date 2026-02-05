@@ -30,6 +30,7 @@ def get_model_inputs(player_name, opponent, is_home=True, days_rest=2):
     feature_columns = [
         "is_home",
         "days_rest",
+        "opp_pts_allowed_L10",
         "pts_L5",
         "pts_L10",
         "pts_ema_L5",
