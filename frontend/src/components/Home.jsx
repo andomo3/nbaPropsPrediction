@@ -42,8 +42,13 @@ const mockFactors = (stat) => ([
 ]);
 
 const buildMockResult = (apiResult) => {
-    const projection = Number(apiResult.projection ?? 0);
-    const probabilityOver = Number(apiResult.probability_over ?? 0.5);
+    const projection = Number(
+        apiResult?.prediction?.projected_points ?? apiResult.projection ?? 0
+    );
+    const probabilityOver = Number(
+        apiResult?.prediction?.win_probability ?? apiResult.probability_over ?? 0.5
+    );
+    const recommendation = apiResult?.prediction?.recommendation ?? apiResult.edge;
     const historicalGames = Array.from({ length: 10 }, (_, idx) => ({
         game: `G-${idx + 1}`,
         value: Number((projection + (Math.random() * 8 - 4)).toFixed(1)),
@@ -53,10 +58,17 @@ const buildMockResult = (apiResult) => {
     const avg = historicalGames.reduce((sum, g) => sum + g.value, 0) / historicalGames.length;
 
     return {
-        player: apiResult.player,
+        player: apiResult?.meta?.player ?? apiResult.player,
         stat: apiResult.stat,
-        line: apiResult.line,
-        prediction: apiResult.edge?.toUpperCase() === 'OVER' ? 'OVER' : 'UNDER',
+        line: apiResult?.prediction?.line ?? apiResult.line,
+        prediction:
+            recommendation?.toUpperCase() === 'BET_OVER'
+                ? 'OVER'
+                : recommendation?.toUpperCase() === 'BET_UNDER'
+                    ? 'UNDER'
+                    : apiResult.edge?.toUpperCase() === 'OVER'
+                        ? 'OVER'
+                        : 'UNDER',
         confidence: Math.round(probabilityOver * 100),
         probability: probabilityOver,
         projection,
@@ -158,6 +170,7 @@ const Home = () => {
                         loading={loading}
                         error={error}
                         lastPayload={lastPayload}
+                        apiBase={API_BASE}
                     />
                 </div>
 

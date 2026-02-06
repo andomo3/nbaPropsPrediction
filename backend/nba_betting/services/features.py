@@ -7,7 +7,7 @@ from django.db.models import Q
 from nba_betting.models import Player, PlayerStats
 
 
-def get_model_inputs(player_name, opponent, is_home=True, days_rest=2):
+def get_model_inputs(player_name, opponent, is_home=True):
     player = _find_player(player_name)
     if not player:
         return None, "Player not found."
@@ -30,7 +30,6 @@ def get_model_inputs(player_name, opponent, is_home=True, days_rest=2):
     feature_columns = [
         "is_home",
         "days_rest",
-        "opp_pts_allowed_L10",
         "pts_L5",
         "pts_L10",
         "pts_ema_L5",
@@ -49,7 +48,7 @@ def get_model_inputs(player_name, opponent, is_home=True, days_rest=2):
 
     feature_row = latest[feature_columns].astype(float).to_frame().T
     feature_row["is_home"] = 1.0 if is_home else 0.0
-    feature_row["days_rest"] = float(days_rest)
+    feature_row["days_rest"] = float(latest.get("days_rest", 2) or 2)
     feature_row["opp_pts_allowed_L10"] = float(opp_def)
 
     return player, feature_row

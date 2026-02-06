@@ -57,7 +57,7 @@ const FEATURES = [
 
 const HowItWorks = () => {
     return (
-    <section id="how-it-works" className="py-20">
+    <section id="how-it-works" className="pt-0 pb-20">
             <div className="container mx-auto px-4 max-w-6xl">
                 <div className="text-center mb-16 md:mb-20">
                     <span className="text-sm uppercase tracking-[0.2em] text-primary font-medium mb-4 block">
