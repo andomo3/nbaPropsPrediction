@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -11,15 +11,6 @@ import {
     SelectValue,
 } from './ui/select';
 
-const PROP_TYPES = [
-    { value: 'pts', label: 'Points' },
-    { value: 'reb', label: 'Rebounds' },
-    { value: 'ast', label: 'Assists' },
-    { value: 'stl', label: 'Steals' },
-    { value: 'blk', label: 'Blocks' },
-    { value: 'pra', label: 'Pts + Reb + Ast' },
-];
-
 const PredictionForm = ({
     players = [],
     teams = [],
@@ -27,30 +18,74 @@ const PredictionForm = ({
     loading,
     error,
     lastPayload,
+    apiBase,
 }) => {
     const [playerName, setPlayerName] = useState('');
     const [playerQuery, setPlayerQuery] = useState('');
     const [playerOpen, setPlayerOpen] = useState(false);
-    const [opponent, setOpponent] = useState('');
-    const [stat, setStat] = useState('pts');
+    const [playerResults, setPlayerResults] = useState([]);
+    const [playerLoading, setPlayerLoading] = useState(false);
+    const [opponentTicker, setOpponentTicker] = useState('');
     const [line, setLine] = useState('');
     const [isHome, setIsHome] = useState(true);
-    const [daysRest, setDaysRest] = useState(2);
     const [fieldErrors, setFieldErrors] = useState({});
+    const searchTimeoutRef = useRef(null);
 
     const playerOptions = useMemo(() => [...players].sort(), [players]);
     const teamOptions = useMemo(() => [...teams].sort(), [teams]);
     const filteredPlayers = useMemo(() => {
         const query = playerQuery.trim().toLowerCase();
-        if (!query) return playerOptions;
-        return playerOptions.filter((player) => player.toLowerCase().includes(query));
-    }, [playerOptions, playerQuery]);
+        const source = playerResults.length ? playerResults : playerOptions;
+        if (!query) return [];
+        return source
+            .filter((player) => player.toLowerCase().includes(query))
+            .slice(0, 8);
+    }, [playerOptions, playerQuery, playerResults]);
+
+    useEffect(() => {
+        if (!apiBase) return;
+        const query = playerQuery.trim();
+        if (!query) {
+            setPlayerResults([]);
+            setPlayerLoading(false);
+            return;
+        }
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+        setPlayerLoading(true);
+        searchTimeoutRef.current = setTimeout(async () => {
+            try {
+                const res = await fetch(`${apiBase}/api/players/?q=${encodeURIComponent(query)}`);
+                if (!res.ok) throw new Error('Failed to search players');
+                const data = await res.json();
+                const names = Array.isArray(data)
+                    ? data
+                          .map((player) => player.full_name)
+                          .filter(Boolean)
+                    : [];
+                setPlayerResults(names);
+            } catch (err) {
+                setPlayerResults([]);
+            } finally {
+                setPlayerLoading(false);
+            }
+        }, 200);
+        return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        };
+    }, [apiBase, playerQuery]);
 
     const validate = () => {
         const nextErrors = {};
-        if (!playerName.trim()) nextErrors.playerName = 'Player name is required.';
-        if (!opponent) nextErrors.opponent = 'Opponent is required.';
-        if (!stat) nextErrors.stat = 'Stat type is required.';
+        if (!playerName.trim()) {
+            nextErrors.playerName = 'Player name is required.';
+        } else if (filteredPlayers.length && !filteredPlayers.includes(playerName.trim())) {
+            nextErrors.playerName = 'Select a player from the list.';
+        }
+        if (!opponentTicker) nextErrors.opponentTicker = 'Opponent is required.';
         if (line === '' || Number.isNaN(Number(line))) nextErrors.line = 'Enter a valid line.';
         setFieldErrors(nextErrors);
         return Object.keys(nextErrors).length === 0;
@@ -61,21 +96,17 @@ const PredictionForm = ({
         if (!validate()) return;
         onSubmit({
             player_name: playerName.trim(),
-            stat,
-            line: Number(line),
-            opponent,
+            opponent_ticker: opponentTicker,
             is_home: isHome,
-            days_rest: Number(daysRest) || 2,
+            line: Number(line),
         });
     };
 
     const currentPayload = {
         player_name: playerName.trim(),
-        stat,
         line: line === '' ? '' : Number(line),
-        opponent,
+        opponent_ticker: opponentTicker,
         is_home: isHome,
-        days_rest: Number(daysRest) || 2,
     };
 
     const isSameAsLast =
@@ -86,7 +117,7 @@ const PredictionForm = ({
         <form onSubmit={handleSubmit} className="space-y-8">
             <div className="grid gap-6 md:gap-8 md:grid-cols-2">
                 <div className="space-y-3 relative">
-                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Player</Label>
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">player_name</Label>
                     <Input
                         value={playerQuery}
                         onChange={(e) => {
@@ -103,7 +134,10 @@ const PredictionForm = ({
                     />
                     {playerOpen && (
                         <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover text-popover-foreground max-h-56 overflow-y-auto">
-                            {filteredPlayers.length ? (
+                            {playerLoading && (
+                                <div className="px-3 py-2 text-base text-muted-foreground">Searching...</div>
+                            )}
+                            {!playerLoading && filteredPlayers.length ? (
                                 filteredPlayers.map((player) => (
                                     <button
                                         type="button"
@@ -119,7 +153,8 @@ const PredictionForm = ({
                                         {player}
                                     </button>
                                 ))
-                            ) : (
+                            ) : null}
+                            {!playerLoading && !filteredPlayers.length && (
                                 <div className="px-3 py-2 text-base text-muted-foreground">No matches</div>
                             )}
                         </div>
@@ -129,8 +164,8 @@ const PredictionForm = ({
                     )}
                 </div>
                 <div className="space-y-3">
-                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Opponent</Label>
-                    <Select value={opponent} onValueChange={setOpponent}>
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">opponent_ticker</Label>
+                    <Select value={opponentTicker} onValueChange={setOpponentTicker}>
                         <SelectTrigger className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground">
                             <SelectValue placeholder="Select opponent" />
                         </SelectTrigger>
@@ -142,61 +177,29 @@ const PredictionForm = ({
                         ))}
                     </SelectContent>
                     </Select>
-                    {fieldErrors.opponent && (
-                        <p className="text-sm text-muted-foreground">{fieldErrors.opponent}</p>
+                    {fieldErrors.opponentTicker && (
+                        <p className="text-sm text-muted-foreground">{fieldErrors.opponentTicker}</p>
                     )}
                 </div>
             </div>
 
             <div className="grid gap-6 md:gap-8 md:grid-cols-2">
                 <div className="space-y-3">
-                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Prop Type</Label>
-                    <Select value={stat} onValueChange={setStat}>
-                        <SelectTrigger className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground">
-                            <SelectValue placeholder="Select prop" />
-                        </SelectTrigger>
-                    <SelectContent className="bg-popover border-border rounded-xl">
-                        {PROP_TYPES.map((prop) => (
-                            <SelectItem key={prop.value} value={prop.value} className="text-base text-popover-foreground py-3">
-                                {prop.label}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                    </Select>
-                    {fieldErrors.stat && (
-                        <p className="text-sm text-muted-foreground">{fieldErrors.stat}</p>
-                    )}
-                </div>
-                <div className="space-y-3">
-                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Line</Label>
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">line</Label>
                     <Input
                         type="number"
                         step="0.5"
                         value={line}
                         onChange={(e) => setLine(e.target.value)}
                         className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:ring-2 focus:ring-primary/20"
-                        placeholder="25.5"
+                        placeholder="24.5"
                     />
                     {fieldErrors.line && (
                         <p className="text-sm text-muted-foreground">{fieldErrors.line}</p>
                     )}
                 </div>
-            </div>
-
-            <div className="grid gap-6 md:gap-8 md:grid-cols-2">
                 <div className="space-y-3">
-                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Days Rest</Label>
-                    <Input
-                        type="number"
-                        min="0"
-                        max="7"
-                        value={daysRest}
-                        onChange={(e) => setDaysRest(e.target.value)}
-                        className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
-                </div>
-                <div className="space-y-3">
-                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">Fixture</Label>
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">is_home</Label>
                     <div className="flex items-center gap-2 h-12 md:h-14 bg-input border border-border rounded-xl px-2">
                         <button
                             type="button"
