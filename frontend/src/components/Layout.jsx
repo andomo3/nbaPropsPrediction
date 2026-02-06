@@ -32,7 +32,7 @@ const Layout = () => {
                 ]}
             />
             <main className="container mx-auto px-4 py-20 md:py-32">
-                <div className="w-full flex flex-col items-center text-center">
+                <div className="w-full flex flex-col items-center text-center mt-12 md:mt-16">
                     <Outlet />
                 </div>
             </main>

@@ -99,4 +99,10 @@ CORS_ALLOWED_ORIGINS = [
     origin for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if origin
 ]
 
+if DEBUG and not CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")

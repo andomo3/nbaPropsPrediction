@@ -58,19 +58,17 @@ class ManualPredictionView(APIView):
     def post(self, request):
         data = request.data or {}
         player_name = data.get("player_name")
-        stat = data.get("stat")
+        stat = data.get("stat") or "pts"
         user_line = data.get("line")
-        opponent = data.get("opponent")
+        opponent = data.get("opponent_ticker") or data.get("opponent")
         is_home = data.get("is_home", True)
-        days_rest = data.get("days_rest", 2)
 
         missing = [
             field
             for field, value in (
                 ("player_name", player_name),
-                ("stat", stat),
                 ("line", user_line),
-                ("opponent", opponent),
+                ("opponent_ticker", opponent),
             )
             if value in (None, "")
         ]
@@ -91,16 +89,10 @@ class ManualPredictionView(APIView):
         if isinstance(is_home, str):
             is_home = is_home.lower() in {"true", "1", "yes", "y"}
 
-        try:
-            days_rest = float(days_rest)
-        except (TypeError, ValueError):
-            days_rest = 2
-
         player, feature_row_or_error = get_model_inputs(
             player_name=player_name,
             opponent=opponent,
             is_home=is_home,
-            days_rest=days_rest,
         )
         if player is None:
             return Response(
