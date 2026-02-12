@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import time
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -190,13 +191,18 @@ def load_player_stats(
     team_map: TeamMap,
     skip_existing: bool = False,
     allowed_seasons: Optional[set] = None,
+    log_every: int = 5000,
+    log_fn=None,
 ) -> int:
     if not path.exists():
         return 0
     count = 0
+    processed = 0
+    started_at = time.monotonic()
     with path.open("r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            processed += 1
             game_id = (row.get("gameId") or "").strip()
             player_id = (row.get("personId") or "").strip()
             if not game_id or not player_id:
@@ -266,6 +272,11 @@ def load_player_stats(
             player.save(update_fields=["current_team"])
             count += 1
 
+            if log_fn and log_every and count % log_every == 0:
+                elapsed = time.monotonic() - started_at
+                rate = count / elapsed if elapsed > 0 else 0
+                log_fn(f"PlayerStats progress: {count:,} rows saved ({rate:,.1f} rows/sec)")
+
     return count
 
 
@@ -302,6 +313,12 @@ class Command(BaseCommand):
             "--season-end",
             default="2024-25",
             help="Latest season label to import (default: 2024-25).",
+        )
+        parser.add_argument(
+            "--log-every",
+            type=int,
+            default=5000,
+            help="Log progress every N PlayerStats rows (default: 5000). Use 0 to disable.",
         )
 
     def handle(self, *args, **options):
@@ -352,5 +369,7 @@ class Command(BaseCommand):
                 team_map,
                 skip_existing=options.get("skip_existing_stats"),
                 allowed_seasons=allowed_seasons,
+                log_every=options.get("log_every") or 0,
+                log_fn=self.stdout.write,
             )
             self.stdout.write(f"PlayerStats loaded/updated: {stats_count}")
