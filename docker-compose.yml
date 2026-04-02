@@ -1,6 +1,40 @@
-version: "3.9"
+# =============================================================================
+# Shared Airflow configuration applied to webserver, scheduler, and init.
+# Using a YAML anchor to avoid repetition.
+# =============================================================================
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.9.2
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+    AIRFLOW__CORE__FERNET_KEY: ""
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+    # NBA props DB connection (used by DAG Python tasks)
+    NBA_DB_USER: postgres
+    NBA_DB_PASSWORD: postgres
+    # JDBC URL for PySpark → PostgreSQL writes
+    NBA_JDBC_URL: jdbc:postgresql://db:5432/nba_props
+    SPARK_MASTER_URL: spark://spark-master:7077
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./scripts:/opt/airflow/scripts
+    - ./data:/opt/airflow/data
+    - airflow_logs:/opt/airflow/logs
+    - airflow_plugins:/opt/airflow/plugins
+  depends_on:
+    airflow_db:
+      condition: service_healthy
+  networks:
+    - nba_net
 
 services:
+
+  # ===========================================================================
+  # Original services — unchanged
+  # ===========================================================================
+
   web:
     build: .
     command: python backend/manage.py runserver 0.0.0.0:8000
@@ -11,8 +45,12 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - nba_net
 
   db:
     image: postgres:15
@@ -24,11 +62,159 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Runs once on first container start (empty volume only).
+      # Adds pipeline-owned tables/views without touching Django ORM tables.
+      # If the volume already exists, apply manually:
+      #   docker-compose exec db psql -U postgres -d nba_props \
+      #     -f /docker-entrypoint-initdb.d/01_pipeline_schema.sql
+      - ./scripts/db_init.sql:/docker-entrypoint-initdb.d/01_pipeline_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nba_props}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nba_net
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
+    networks:
+      - nba_net
 
+  # ===========================================================================
+  # Airflow metadata database (isolated from nba_props)
+  # ===========================================================================
+
+  airflow_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nba_net
+
+  # ===========================================================================
+  # Airflow init: runs DB migrations, creates admin user, registers connections.
+  # Exits after completing — depends_on: service_completed_successfully used
+  # by webserver and scheduler.
+  # ===========================================================================
+
+  airflow-init:
+    <<: *airflow-common
+    command: >
+      bash -c "
+        airflow db upgrade &&
+        airflow users create
+          --username admin
+          --password admin
+          --firstname Admin
+          --lastname User
+          --role Admin
+          --email admin@example.com || true &&
+        airflow connections add spark_default
+          --conn-type spark
+          --conn-host spark-master
+          --conn-port 7077 || true &&
+        airflow connections add nba_postgres
+          --conn-type postgres
+          --conn-host db
+          --conn-port 5432
+          --conn-schema nba_props
+          --conn-login postgres
+          --conn-password postgres || true
+      "
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      airflow_db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    depends_on:
+      airflow_db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Spark cluster (bitnami/spark:3.5.1 — includes Java 17 + Python 3.11)
+  # Built from Dockerfile.spark which adds statsmodels + PostgreSQL JDBC driver.
+  # ===========================================================================
+
+  spark-master:
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    hostname: spark-master
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    ports:
+      - "7077:7077"   # Spark master RPC (used by SparkSubmitOperator)
+      - "8081:8080"   # Spark master Web UI (host 8081 avoids collision with Airflow)
+    volumes:
+      - ./scripts:/opt/spark/scripts
+      - ./data:/opt/spark/data
+    networks:
+      - nba_net
+
+  spark-worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    hostname: spark-worker-1
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      SPARK_WORKER_CORES: "2"
+      SPARK_WORKER_MEMORY: "2g"
+    depends_on:
+      - spark-master
+    volumes:
+      - ./scripts:/opt/spark/scripts
+      - ./data:/opt/spark/data
+    networks:
+      - nba_net
+
+# =============================================================================
+# Volumes
+# =============================================================================
 volumes:
   postgres_data:
+  airflow_postgres_data:
+  airflow_logs:
+  airflow_plugins:
+
+# =============================================================================
+# Networks
+# All services share nba_net so Airflow workers can reach db, spark-master, etc.
+# =============================================================================
+networks:
+  nba_net:
+    driver: bridge
