@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(mkdir -p data/landing data/archive data/model_ready dags scripts)",
+      "Bash(touch data/landing/.gitkeep data/archive/.gitkeep data/model_ready/.gitkeep dags/.gitkeep scripts/.gitkeep)",
+      "Bash(docker-compose build:*)",
+      "Bash(docker run:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker-compose restart:*)"
+    ]
+  }
+}
