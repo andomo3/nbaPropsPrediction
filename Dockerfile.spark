@@ -1,0 +1,45 @@
+# Dockerfile.spark
+#
+# Custom Spark image for the NBA props feature engineering pipeline.
+# Used by: spark-master and spark-worker-1 in docker-compose.yml.
+# The existing Dockerfile (for the Django web service) is NOT modified.
+#
+# Base: apache/spark:3.5.1
+#   - Official Apache Spark Docker image (available on Docker Hub since Spark 3.3)
+#   - Apache Spark 3.5.1
+#   - Java 17
+#   - Python 3 (via spark-python)
+#   - Spark home: /opt/spark
+#   - Runs as root by default
+#
+# Additions:
+#   - statsmodels: Holt damped trend (used in applyInPandas per player)
+#   - pandas / numpy: applyInPandas infrastructure
+#   - psycopg2-binary: PostgreSQL driver (used by DAG export task)
+#   - postgresql-42.7.3.jar: JDBC driver for Spark ↔ PostgreSQL I/O
+
+FROM apache/spark:3.5.1
+
+USER root
+
+# Install Python dependencies needed on Spark workers.
+# statsmodels must be available on every executor node because applyInPandas
+# serialises the function and its imports to the executor.
+# apache/spark:3.5.1 ships Python 3.8 via Ubuntu 20.04.
+# Upgrade pip first (bundled 20.0.2 can't resolve modern packages cleanly),
+# then install versions compatible with Python 3.8:
+#   pandas  ≤ 2.0.x  (2.1+ requires Python 3.9+)
+#   numpy   ≤ 1.24.x (1.25+ requires Python 3.9+)
+#   statsmodels 0.14.x works with Python 3.8 + numpy 1.22+
+RUN pip3 install --upgrade pip && \
+    pip3 install --no-cache-dir \
+        "statsmodels==0.14.1" \
+        "pandas==2.0.3" \
+        "numpy==1.24.4" \
+        "psycopg2-binary==2.9.9"
+
+# Download PostgreSQL JDBC driver (compatible with PostgreSQL 15 + Spark 3.5).
+# /opt/spark/jars/ is on the default Spark classpath in apache/spark images.
+RUN curl -fsSL \
+      "https://jdbc.postgresql.org/download/postgresql-42.7.3.jar" \
+      -o /opt/spark/jars/postgresql-42.7.3.jar
