@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker-compose exec:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(curl -s \"http://localhost:8000/api/picks/?stat=pts\")",
+      "Bash(python -m json.tool)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(curl -s -X POST \"http://localhost:8000/api/backtest/\" -H \"Content-Type: application/json\" -d \"{\"\"player_name\"\":\"\"LeBron James\"\",\"\"stat\"\":\"\"pts\"\",\"\"date_from\"\":\"\"2023-01-01\"\",\"\"date_to\"\":\"\"2023-06-01\"\"}\")"
+    ]
+  }
+}

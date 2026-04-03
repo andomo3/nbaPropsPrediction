@@ -9,3 +9,9 @@ COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 COPY . /app
+
+# Copy trained models
+COPY data/models /app/data/models
+
+# Collect static files
+RUN python backend/manage.py collectstatic --noinput

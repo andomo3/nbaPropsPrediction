@@ -27,8 +27,9 @@ class Game(models.Model):
     game_id = models.CharField(max_length=20, primary_key=True)
     date = models.DateField()
     season = models.CharField(max_length=9)
-    home_score = models.PositiveSmallIntegerField()
-    away_score = models.PositiveSmallIntegerField()
+    # Nullable so ESPN sync can insert in-progress/upcoming games before scores exist
+    home_score = models.SmallIntegerField(null=True, blank=True)
+    away_score = models.SmallIntegerField(null=True, blank=True)
     home_team = models.ForeignKey(
         Team, on_delete=models.CASCADE, related_name="home_games"
     )
@@ -74,3 +75,62 @@ class Prediction(models.Model):
     prediction_timestamp = models.DateTimeField()
     prob_over = models.FloatField()
     recommendation = models.CharField(max_length=50)
+
+
+class DailyPick(models.Model):
+    """Pre-generated morning picks for the LITE top-20 player list."""
+
+    STAT_CHOICES = [("pts", "Points"), ("reb", "Rebounds"), ("ast", "Assists")]
+
+    pick_date = models.DateField(db_index=True)
+    player = models.ForeignKey(Player, on_delete=models.CASCADE)
+    opponent_abbr = models.CharField(max_length=10)
+    is_home = models.BooleanField()
+    stat = models.CharField(max_length=10, choices=STAT_CHOICES)
+    line = models.FloatField(help_text="L5 rolling average used as the model line")
+    prob_over = models.FloatField()
+    projection = models.FloatField()
+    edge = models.CharField(max_length=10)  # "Over" | "Under"
+    model_version = models.CharField(max_length=50, default="xgb_v1")
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ["pick_date", "player", "stat"]
+        ordering = ["-prob_over"]
+
+
+class BacktestRun(models.Model):
+    """Header + aggregate results for a single backtest request. Acts as a cache key."""
+
+    player_name = models.CharField(max_length=100)
+    stat = models.CharField(max_length=10)
+    date_from = models.DateField()
+    date_to = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    total_bets = models.IntegerField(default=0)
+    wins = models.IntegerField(default=0)
+    accuracy = models.FloatField(default=0.0)
+    total_pnl = models.FloatField(default=0.0)
+    roi = models.FloatField(default=0.0, help_text="Return on investment as a percentage")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["player_name", "stat", "date_from", "date_to"]),
+        ]
+
+
+class BacktestResult(models.Model):
+    """One row per game within a BacktestRun."""
+
+    run = models.ForeignKey(BacktestRun, on_delete=models.CASCADE, related_name="results")
+    game_date = models.DateField()
+    opponent = models.CharField(max_length=10)
+    actual = models.FloatField()
+    line = models.FloatField()
+    prob_over = models.FloatField()
+    predicted_over = models.BooleanField()
+    correct = models.BooleanField()
+    pnl = models.FloatField(help_text="+1.0 if correct, -1.1 if wrong (simulates -110 odds)")
+
+    class Meta:
+        ordering = ["game_date"]

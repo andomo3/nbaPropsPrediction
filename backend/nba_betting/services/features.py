@@ -25,7 +25,9 @@ def get_model_inputs(player_name, opponent, is_home=True):
     latest = history_df.iloc[-1]
     opp_def = _get_opponent_pts_allowed(opponent, latest["date"])
     if opp_def is None or np.isnan(opp_def):
-        return None, "Not enough opponent history to build features."
+        # Opponent-specific history is missing or sparse. Fall back to the
+        # league-wide average pts-allowed so the prediction can still proceed.
+        opp_def = _get_league_avg_pts_allowed(latest["date"])
 
     feature_columns = [
         "is_home",
@@ -193,3 +195,40 @@ def _get_opponent_pts_allowed(opponent, as_of_date):
     if pd.isna(latest):
         return None
     return float(latest)
+
+
+def _get_league_avg_pts_allowed(as_of_date=None):
+    """
+    Computes the league-wide average points allowed per game as a fallback
+    when the requested opponent has no history in the DB.
+    Returns 112.0 — a reasonable modern NBA baseline — if the DB is empty.
+    """
+    NBA_BASELINE_PTS = 112.0
+
+    try:
+        qs = (
+            PlayerStats.objects.filter(period=0)
+            .select_related("game")
+            .values("game__game_id", "game__date", "pts")
+        )
+        rows = list(qs)
+        if not rows:
+            return NBA_BASELINE_PTS
+
+        df = pd.DataFrame(rows)
+        df.columns = ["game_id", "date", "pts"]
+        df["date"] = pd.to_datetime(df["date"])
+
+        if as_of_date is not None:
+            cutoff = pd.to_datetime(as_of_date)
+            df = df[df["date"] < cutoff]
+
+        if df.empty:
+            return NBA_BASELINE_PTS
+
+        pts_per_game = df.groupby("game_id")["pts"].sum()
+        league_avg = float(pts_per_game.mean())
+        return league_avg if not np.isnan(league_avg) else NBA_BASELINE_PTS
+
+    except Exception:
+        return NBA_BASELINE_PTS
