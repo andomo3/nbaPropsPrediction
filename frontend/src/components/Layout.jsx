@@ -16,6 +16,13 @@ const Layout = () => {
                         ],
                     },
                     {
+                        label: 'Tools',
+                        links: [
+                            { label: 'Daily Picks', href: '/picks' },
+                            { label: 'Backtesting', href: '/backtest' },
+                        ],
+                    },
+                    {
                         label: 'Insights',
                         links: [
                             { label: 'How It Works', href: '/overview' },
