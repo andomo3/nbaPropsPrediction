@@ -19,4 +19,4 @@ RUN cd /app/backend && python manage.py collectstatic --noinput
 # Set working directory to Django project root so gunicorn finds the module
 WORKDIR /app/backend
 
-CMD ["sh", "-c", "gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 1 --timeout 120"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 1 --timeout 120"]
