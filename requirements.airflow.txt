@@ -1,0 +1,13 @@
+# requirements.airflow.txt
+#
+# Python dependencies for the Airflow container (apache/airflow:2.9.2).
+# Kept separate from backend/requirements.txt to avoid SQLAlchemy version
+# conflicts between Django and Airflow.
+#
+# Install inside the Airflow container:
+#   pip install -r requirements.airflow.txt
+
+apache-airflow==2.9.2
+apache-airflow-providers-apache-spark==4.5.0
+apache-airflow-providers-postgres==5.10.0
+psycopg2-binary>=2.9
