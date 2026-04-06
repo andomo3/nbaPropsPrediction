@@ -4,22 +4,21 @@ from django.contrib import admin
 from django.core.management import call_command
 from django.http import JsonResponse
 from django.urls import include, path
-from django.views.decorators.http import require_POST
 
 
 def health(request):
     return JsonResponse({"status": "ok"})
 
 
-@require_POST
-def cron_trigger(request):
+def cron_trigger(request, secret):
     """
     Called daily by cron-job.org to sync ESPN data and generate picks.
-    Protected by a shared secret in the Authorization header.
+    Protected by a secret token in the URL path.
+    Set CRON_SECRET env var on Railway, then point cron-job.org at:
+      /cron/daily/<your-secret>/
     """
-    token = request.headers.get("Authorization", "")
-    expected = f"Bearer {os.getenv('CRON_SECRET', '')}"
-    if not token or token != expected:
+    expected = os.getenv("CRON_SECRET", "")
+    if not expected or secret != expected:
         return JsonResponse({"error": "unauthorized"}, status=401)
 
     try:
@@ -32,7 +31,7 @@ def cron_trigger(request):
 
 urlpatterns = [
     path("health/", health, name="health"),
-    path("cron/daily/", cron_trigger, name="cron-trigger"),
+    path("cron/daily/<str:secret>/", cron_trigger, name="cron-trigger"),
     path("admin/", admin.site.urls),
     path("api/", include("nba_betting.urls")),
 ]
