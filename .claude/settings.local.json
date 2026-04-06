@@ -7,7 +7,9 @@
       "Bash(python -m json.tool)",
       "Bash(docker-compose logs:*)",
       "Bash(docker-compose up:*)",
-      "Bash(curl -s -X POST \"http://localhost:8000/api/backtest/\" -H \"Content-Type: application/json\" -d \"{\"\"player_name\"\":\"\"LeBron James\"\",\"\"stat\"\":\"\"pts\"\",\"\"date_from\"\":\"\"2023-01-01\"\",\"\"date_to\"\":\"\"2023-06-01\"\"}\")"
+      "Bash(curl -s -X POST \"http://localhost:8000/api/backtest/\" -H \"Content-Type: application/json\" -d \"{\"\"player_name\"\":\"\"LeBron James\"\",\"\"stat\"\":\"\"pts\"\",\"\"date_from\"\":\"\"2023-01-01\"\",\"\"date_to\"\":\"\"2023-06-01\"\"}\")",
+      "Bash(python -c \"import secrets; print\\(secrets.token_urlsafe\\(50\\)\\)\")",
+      "Bash(du -sh data/models/*)"
     ]
   }
 }
