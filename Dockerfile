@@ -12,3 +12,5 @@ COPY . /app
 
 # Collect static files
 RUN python backend/manage.py collectstatic --noinput
+
+CMD ["sh", "-c", "gunicorn backend.wsgi --chdir /app/backend --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120"]

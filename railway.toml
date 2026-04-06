@@ -3,7 +3,6 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "gunicorn backend.wsgi --chdir /app/backend --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
-healthcheckPath = "/api/options/"
+healthcheckPath = "/health/"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
