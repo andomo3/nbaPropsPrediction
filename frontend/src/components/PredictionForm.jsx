@@ -26,6 +26,7 @@ const PredictionForm = ({
     const [playerResults, setPlayerResults] = useState([]);
     const [playerLoading, setPlayerLoading] = useState(false);
     const [opponentTicker, setOpponentTicker] = useState('');
+    const [stat, setStat] = useState('pts');
     const [line, setLine] = useState('');
     const [isHome, setIsHome] = useState(true);
     const [fieldErrors, setFieldErrors] = useState({});
@@ -98,6 +99,7 @@ const PredictionForm = ({
             player_name: playerName.trim(),
             opponent_ticker: opponentTicker,
             is_home: isHome,
+            stat,
             line: Number(line),
         });
     };
@@ -107,6 +109,7 @@ const PredictionForm = ({
         line: line === '' ? '' : Number(line),
         opponent_ticker: opponentTicker,
         is_home: isHome,
+        stat,
     };
 
     const isSameAsLast =
@@ -185,6 +188,19 @@ const PredictionForm = ({
 
             <div className="grid gap-6 md:gap-8 md:grid-cols-2">
                 <div className="space-y-3">
+                    <Label className="text-sm uppercase tracking-wider font-semibold text-primary">stat</Label>
+                    <Select value={stat} onValueChange={setStat}>
+                        <SelectTrigger className="h-12 md:h-14 text-base bg-input border-border rounded-xl text-foreground">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border-border rounded-xl">
+                            <SelectItem value="pts" className="text-base text-popover-foreground py-3">Points</SelectItem>
+                            <SelectItem value="reb" className="text-base text-popover-foreground py-3">Rebounds</SelectItem>
+                            <SelectItem value="ast" className="text-base text-popover-foreground py-3">Assists</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-3">
                     <Label className="text-sm uppercase tracking-wider font-semibold text-primary">line</Label>
                     <Input
                         type="number"
@@ -198,6 +214,9 @@ const PredictionForm = ({
                         <p className="text-sm text-muted-foreground">{fieldErrors.line}</p>
                     )}
                 </div>
+            </div>
+
+            <div className="grid gap-6 md:gap-8 md:grid-cols-2">
                 <div className="space-y-3">
                     <Label className="text-sm uppercase tracking-wider font-semibold text-primary">is_home</Label>
                     <div className="flex items-center gap-2 h-12 md:h-14 bg-input border border-border rounded-xl px-2">
