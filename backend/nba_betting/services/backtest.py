@@ -41,7 +41,14 @@ FEATURE_COLUMNS = [
     "opp_pts_allowed_L10",
 ]
 
-_predictor = ModelPredictor()
+_predictor = None
+
+
+def _get_predictor() -> ModelPredictor:
+    global _predictor
+    if _predictor is None:
+        _predictor = ModelPredictor()
+    return _predictor
 
 
 def run_backtest(
@@ -131,7 +138,7 @@ def run_backtest(
             }]
         )
 
-        prob_over = _predictor.predict_probability(feature_row, stat, "xgb")
+        prob_over = _get_predictor().predict_probability(feature_row, stat, "xgb")
         if prob_over is None:
             continue
 
