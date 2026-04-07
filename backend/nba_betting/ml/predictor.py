@@ -53,7 +53,10 @@ class ModelPredictor:
                        Defaults to MODEL_DIR env var or 'data/models'.
         """
         if model_dir is None:
-            model_dir = os.getenv("MODEL_DIR") or "data/models"
+            # Resolve relative to the repo root (two levels up from this file)
+            _repo_root = Path(__file__).resolve().parents[4]
+            _default = _repo_root / "data" / "models"
+            model_dir = os.getenv("MODEL_DIR") or str(_default)
         self.model_dir = Path(model_dir)
         self._models: Dict[str, Union[xgb.Booster, "CatBoostClassifier"]] = {}
 
