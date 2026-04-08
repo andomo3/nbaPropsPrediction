@@ -10,7 +10,7 @@ COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 # Cache bust: increment when forced rebuild is needed
-ARG CACHEBUST=3
+ARG CACHEBUST=4
 COPY . /app
 
 # Collect static files (run from the Django project root)
