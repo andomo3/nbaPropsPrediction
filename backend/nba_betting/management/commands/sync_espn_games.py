@@ -32,9 +32,9 @@ from nba_betting.models import Game, Player, PlayerStats, Team
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
 SUMMARY_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary"
 
-# Stats array indices in ESPN box score (fixed positions)
+# Fallback stats array indices (used only if ESPN response has no "names" labels)
 IDX_MIN = 0
-IDX_FG = 1
+IDX_FG  = 1
 IDX_REB = 6
 IDX_AST = 7
 IDX_PTS = 13
@@ -198,27 +198,47 @@ class Command(BaseCommand):
             if not statistics:
                 continue
 
-            athletes = statistics[0].get("athletes", [])
+            stat_group = _find_full_game_group(statistics)
+            if stat_group is None:
+                continue
+
+            # Build a name→index map from the ESPN response so we never rely
+            # on hardcoded positions that can shift between API versions.
+            names = stat_group.get("names", [])
+            idx = {n.upper(): i for i, n in enumerate(names)}
+
+            athletes = stat_group.get("athletes", [])
             for athlete_entry in athletes:
-                if self._sync_player_stats(athlete_entry, game, team):
+                if self._sync_player_stats(athlete_entry, game, team, idx):
                     count += 1
 
         return count
 
-    def _sync_player_stats(self, entry: dict, game: Game, team: Team) -> bool:
+    def _sync_player_stats(self, entry: dict, game: Game, team: Team, idx: dict | None = None) -> bool:
         athlete = entry.get("athlete", {})
         stats = entry.get("stats", [])
 
         if not athlete or not stats:
             return False
 
-        # ESPN stats array must have at least 14 elements
-        if len(stats) < 14:
+        if idx is None:
+            idx = {}
+
+        # Resolve column positions: prefer label-based lookup, fall back to
+        # hardcoded constants so old data formats still work.
+        i_min = idx.get("MIN", IDX_MIN)
+        i_fg  = idx.get("FG",  IDX_FG)
+        i_reb = idx.get("REB", IDX_REB)
+        i_ast = idx.get("AST", IDX_AST)
+        i_pts = idx.get("PTS", IDX_PTS)
+
+        min_needed = max(i_min, i_fg, i_reb, i_ast, i_pts) + 1
+        if len(stats) < min_needed:
             return False
 
         # Parse minutes: "34:56" → 34.93
         try:
-            minutes = _parse_minutes(stats[IDX_MIN])
+            minutes = _parse_minutes(stats[i_min])
         except (ValueError, IndexError):
             return False
 
@@ -227,14 +247,14 @@ class Command(BaseCommand):
 
         # Parse FG: "9-18" → (9, 18)
         try:
-            fgm, fga = _parse_made_attempted(stats[IDX_FG])
+            fgm, fga = _parse_made_attempted(stats[i_fg])
         except (ValueError, IndexError):
             fgm, fga = 0, 0
 
         try:
-            pts = int(stats[IDX_PTS])
-            reb = int(stats[IDX_REB])
-            ast = int(stats[IDX_AST])
+            pts = int(stats[i_pts])
+            reb = int(stats[i_reb])
+            ast = int(stats[i_ast])
         except (ValueError, IndexError):
             return False
 
@@ -304,6 +324,23 @@ class Command(BaseCommand):
 # ------------------------------------------------------------------
 # Helper functions
 # ------------------------------------------------------------------
+
+def _find_full_game_group(statistics: list) -> dict | None:
+    """
+    Return the statistics group that contains full-game player stats.
+
+    ESPN may return multiple groups (e.g. per-quarter + totals). We want the
+    group whose "names" array includes PTS, REB, and AST — that is the
+    full-game totals group. Falls back to statistics[0] if none qualify.
+    """
+    required = {"PTS", "REB", "AST"}
+    for group in statistics:
+        names = {n.upper() for n in group.get("names", [])}
+        if required.issubset(names):
+            return group
+    # Fallback: return the first group and let index-based lookup handle it
+    return statistics[0] if statistics else None
+
 
 def _derive_season(game_date: date) -> str:
     """Convert a game date to NBA season label, e.g. 2024-01-15 → '2023-24'."""
