@@ -1,31 +1,30 @@
 """
-Django management command to train XGBoost and CatBoost classification models.
+Django management command to train XGBoost / CatBoost regression models.
 
 Usage:
     python manage.py train_models
-    python manage.py train_models --tune --n-iter 50 --cv 3
-    python manage.py train_models --csv-path /path/to/data.csv
+    python manage.py train_models --csv-path /path/to/PlayerStatistics.csv
     python manage.py train_models --model-dir /path/to/models
-    python manage.py train_models --no-plots  # Skip plot generation
+    python manage.py train_models --no-catboost   # faster, skip CatBoost
 """
 
-import os
+import logging
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
-from nba_betting.ml.model_trainer import train_all_models
+from nba_betting.ml.train_regression import train_all_regression_models
 
 
 class Command(BaseCommand):
-    help = "Train XGBoost and CatBoost classification models for player props prediction."
+    help = "Train XGBoost and CatBoost regression models for NBA player props prediction."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--csv-path",
             type=str,
             default=None,
-            help="Path to nba_model_ready.csv (defaults to exports/nba_model_ready.csv)",
+            help="Path to PlayerStatistics.csv (defaults to data/raw/PlayerStatistics.csv)",
         )
         parser.add_argument(
             "--model-dir",
@@ -34,117 +33,49 @@ class Command(BaseCommand):
             help="Directory to save trained models (defaults to data/models)",
         )
         parser.add_argument(
-            "--tune",
+            "--no-catboost",
             action="store_true",
-            help="Enable hyperparameter tuning with RandomizedSearchCV",
-        )
-        parser.add_argument(
-            "--n-iter",
-            type=int,
-            default=50,
-            help="Number of iterations for RandomizedSearchCV (default: 50)",
-        )
-        parser.add_argument(
-            "--cv",
-            type=int,
-            default=3,
-            help="Number of cross-validation folds (default: 3)",
-        )
-        parser.add_argument(
-            "--plots-dir",
-            type=str,
-            default=None,
-            help="Directory to save visualization plots (defaults to data/plots)",
-        )
-        parser.add_argument(
-            "--no-plots",
-            action="store_true",
-            help="Skip generating diagnostic plots",
+            help="Skip CatBoost training (faster iteration during dev)",
         )
 
     def handle(self, *args, **options):
-        # Determine project root (nbaPropsPrediction/)
-        # train_models.py is at backend/nba_betting/management/commands/
-        # So parents[4] = nbaPropsPrediction/
-        project_root = Path(__file__).resolve().parents[4]
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")
 
-        # Set default paths
-        csv_path = options["csv_path"]
-        if csv_path is None:
-            csv_path = project_root / "exports" / "nba_model_ready.csv"
-        else:
-            csv_path = Path(csv_path)
+        csv_path  = options.get("csv_path")
+        model_dir = options.get("model_dir")
+        skip_cb   = options.get("no_catboost", False)
 
-        model_dir = options["model_dir"]
-        if model_dir is None:
-            model_dir = project_root / "data" / "models"
-        else:
-            model_dir = Path(model_dir)
+        self.stdout.write("Starting regression model training...")
+        if csv_path:
+            self.stdout.write(f"  CSV: {csv_path}")
+        if model_dir:
+            self.stdout.write(f"  Model dir: {model_dir}")
+        if skip_cb:
+            self.stdout.write("  CatBoost: skipped")
 
-        plots_dir = options["plots_dir"]
-        if plots_dir is None:
-            plots_dir = project_root / "data" / "plots"
-        else:
-            plots_dir = Path(plots_dir)
-
-        tune = options["tune"]
-        n_iter = options["n_iter"]
-        cv = options["cv"]
-        generate_plots = not options["no_plots"]
-
-        # Validate CSV exists
-        if not csv_path.exists():
-            self.stderr.write(
-                self.style.ERROR(f"CSV file not found: {csv_path}")
-            )
-            return
-
-        self.stdout.write(self.style.SUCCESS(f"CSV path: {csv_path}"))
-        self.stdout.write(self.style.SUCCESS(f"Model directory: {model_dir}"))
-        self.stdout.write(self.style.SUCCESS(f"Plots directory: {plots_dir}"))
-        if tune:
-            self.stdout.write(
-                self.style.WARNING(
-                    f"Hyperparameter tuning ENABLED (n_iter={n_iter}, cv={cv})"
-                )
-            )
-        else:
-            self.stdout.write("Hyperparameter tuning: disabled (use --tune to enable)")
-        
-        if generate_plots:
-            self.stdout.write("Diagnostic plots: ENABLED")
-        else:
-            self.stdout.write("Diagnostic plots: disabled (use without --no-plots to enable)")
-
-        # Run training
-        self.stdout.write("\nStarting model training...")
         try:
-            metrics = train_all_models(
-                csv_path=str(csv_path),
-                model_dir=str(model_dir),
-                plots_dir=str(plots_dir),
-                tune=tune,
-                n_iter=n_iter,
-                cv=cv,
-                generate_plots=generate_plots,
+            metadata = train_all_regression_models(
+                csv_path=csv_path,
+                model_dir=Path(model_dir) if model_dir else None,
+                skip_catboost=skip_cb,
             )
 
-            # Print summary
             self.stdout.write("\n" + "=" * 60)
             self.stdout.write(self.style.SUCCESS("TRAINING SUMMARY"))
             self.stdout.write("=" * 60)
 
-            for stat, stat_metrics in metrics.items():
-                self.stdout.write(f"\n{stat.upper()}:")
-                for model_type, m in stat_metrics.items():
-                    self.stdout.write(
-                        f"  {model_type}: AUC={m['auc_roc']:.4f}, "
-                        f"LogLoss={m['log_loss']:.4f}, "
-                        f"Accuracy={m['accuracy']:.4f}"
-                    )
+            for stat, info in metadata.get("stats", {}).items():
+                xgb = info.get("xgb", {})
+                test = xgb.get("test", {})
+                self.stdout.write(
+                    f"  [{stat.upper()}]  "
+                    f"Test MAE={test.get('mae', '?'):.3f}  "
+                    f"Test RMSE={test.get('rmse', '?'):.3f}  "
+                    f"({info.get('test_samples', '?'):,} test rows)"
+                )
 
-            self.stdout.write("\n" + self.style.SUCCESS("Training complete!"))
+            self.stdout.write(self.style.SUCCESS("\nTraining complete!"))
 
-        except Exception as e:
-            self.stderr.write(self.style.ERROR(f"Training failed: {e}"))
+        except Exception as exc:
+            self.stderr.write(self.style.ERROR(f"Training failed: {exc}"))
             raise
