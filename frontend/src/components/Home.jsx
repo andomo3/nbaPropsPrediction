@@ -45,10 +45,24 @@ const buildMockResult = (apiResult) => {
     const projection = Number(
         apiResult?.prediction?.projected_points ?? apiResult.projection ?? 0
     );
+    // New API returns prob_over; old API used probability_over
     const probabilityOver = Number(
-        apiResult?.prediction?.win_probability ?? apiResult.probability_over ?? 0.5
+        apiResult?.prediction?.win_probability
+            ?? apiResult.prob_over
+            ?? apiResult.probability_over
+            ?? 0.5
     );
-    const recommendation = apiResult?.prediction?.recommendation ?? apiResult.edge;
+    // New API has recommendation: "OVER"|"UNDER"; old used edge as string
+    const recommendation =
+        apiResult?.prediction?.recommendation
+            ?? apiResult.recommendation
+            ?? apiResult.edge;
+
+    // edge as a number (new API) or derive from recommendation
+    const edgeNum = typeof apiResult.edge === 'number'
+        ? apiResult.edge
+        : null;
+
     const historicalGames = Array.from({ length: 10 }, (_, idx) => ({
         game: `G-${idx + 1}`,
         value: Number((projection + (Math.random() * 8 - 4)).toFixed(1)),
@@ -57,21 +71,23 @@ const buildMockResult = (apiResult) => {
 
     const avg = historicalGames.reduce((sum, g) => sum + g.value, 0) / historicalGames.length;
 
+    const predStr =
+        recommendation?.toUpperCase() === 'BET_OVER'  ? 'OVER'  :
+        recommendation?.toUpperCase() === 'BET_UNDER' ? 'UNDER' :
+        recommendation?.toUpperCase() === 'OVER'       ? 'OVER'  :
+        recommendation?.toUpperCase() === 'UNDER'      ? 'UNDER' :
+        typeof apiResult.edge === 'string' && apiResult.edge?.toUpperCase() === 'OVER' ? 'OVER' :
+        'UNDER';
+
     return {
         player: apiResult?.meta?.player ?? apiResult.player,
         stat: apiResult.stat,
         line: apiResult?.prediction?.line ?? apiResult.line,
-        prediction:
-            recommendation?.toUpperCase() === 'BET_OVER'
-                ? 'OVER'
-                : recommendation?.toUpperCase() === 'BET_UNDER'
-                    ? 'UNDER'
-                    : apiResult.edge?.toUpperCase() === 'OVER'
-                        ? 'OVER'
-                        : 'UNDER',
+        prediction: predStr,
         confidence: Math.round(probabilityOver * 100),
         probability: probabilityOver,
         projection,
+        edge: edgeNum,
         historicalGames,
         h2hStats: {
             gamesPlayed: 6,

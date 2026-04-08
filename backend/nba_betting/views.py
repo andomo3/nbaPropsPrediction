@@ -93,9 +93,12 @@ class ManualPredictionView(APIView):
         if isinstance(is_home, str):
             is_home = is_home.lower() in {"true", "1", "yes", "y"}
 
+        stat_key = stat.lower().strip()
+
         player, feature_row_or_error = get_model_inputs(
             player_name=player_name,
             opponent=opponent,
+            stat=stat_key,
             is_home=is_home,
         )
         if player is None:
@@ -104,54 +107,44 @@ class ManualPredictionView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Get classification probability (P of beating rolling average)
-        # Change xgb to catboost for the model type if needed
+        # ── Regression projection ─────────────────────────────────────────────
         predictor = get_predictor()
-        base_prob = predictor.predict_probability(feature_row_or_error, stat, "xgb")
-        
-        if base_prob is None:
+        projection = predictor.predict_projection(feature_row_or_error, stat_key, "xgb")
+
+        if projection is None:
             return Response(
                 {"detail": "Model not found for requested stat."},
                 status=status.HTTP_501_NOT_IMPLEMENTED,
             )
 
-        # Get the player's rolling average for this stat (the baseline)
-        stat_key = stat.lower().strip()
-        rolling_avg_col = f"{stat_key}_L5"
-        if rolling_avg_col in feature_row_or_error.columns:
-            rolling_avg = float(feature_row_or_error[rolling_avg_col].iloc[0])
-        else:
-            rolling_avg = line_value  # Fallback
+        projection = round(float(projection), 1)
+        edge_value = round(projection - line_value, 2)
+        recommendation = "OVER" if edge_value > 0 else "UNDER"
 
-        # Get standard deviation for adjustment
-        std_col = f"{stat_key}_std_L10" if stat_key == "pts" else None
-        if std_col and std_col in feature_row_or_error.columns:
+        # ── Derive probability from edge + player std dev ─────────────────────
+        # P(actual > line) ≈ 1 − Φ((line − projection) / std_dev)
+        std_col = f"{stat_key}_std_L10"
+        if std_col in feature_row_or_error.columns:
             std_dev = float(feature_row_or_error[std_col].iloc[0])
         else:
-            # Default std dev estimates based on stat type
-            std_dev = {"pts": 8.0, "reb": 3.0, "ast": 2.5}.get(stat_key, 5.0)
+            std_dev = {"pts": 6.0, "reb": 2.5, "ast": 2.0}.get(stat_key, 4.0)
+        std_dev = max(std_dev, 0.5)  # guard against zero
 
-        # Adjust probability based on line difference from rolling average
-        # If user_line > rolling_avg, probability of over decreases
-        # If user_line < rolling_avg, probability of over increases
-        probability_over = _adjust_probability_for_line(
-            base_prob, rolling_avg, line_value, std_dev
-        )
-        probability_under = float(1.0 - probability_over)
-        edge = "Over" if probability_over >= 0.5 else "Under"
-
-        # Use rolling average as the projection (expected value)
-        projection = rolling_avg
+        z = (line_value - projection) / std_dev
+        prob_over  = float(max(0.01, min(0.99, 1 - norm.cdf(z))))
+        prob_under = round(1.0 - prob_over, 4)
+        prob_over  = round(prob_over, 4)
 
         return Response(
             {
-                "player": f"{player.first_name} {player.last_name}".strip(),
-                "stat": stat,
-                "line": line_value,
-                "projection": float(projection),
-                "probability_over": probability_over,
-                "probability_under": probability_under,
-                "edge": edge,
+                "player":         f"{player.first_name} {player.last_name}".strip(),
+                "stat":           stat_key,
+                "line":           line_value,
+                "projection":     projection,
+                "edge":           edge_value,
+                "recommendation": recommendation,
+                "prob_over":      prob_over,
+                "prob_under":     prob_under,
             }
         )
 
@@ -284,54 +277,3 @@ class BacktestView(APIView):
         return Response(result)
 
 
-def _adjust_probability_for_line(base_prob, rolling_avg, user_line, std_dev):
-    """
-    Adjust the base probability based on the difference between
-    the user's line and the player's rolling average.
-
-    The model predicts P(actual > rolling_avg). We need P(actual > user_line).
-
-    Uses a normal distribution adjustment:
-    - If user_line == rolling_avg, return base_prob
-    - If user_line > rolling_avg, return lower probability
-    - If user_line < rolling_avg, return higher probability
-
-    Args:
-        base_prob: Model's P(over rolling_avg)
-        rolling_avg: Player's rolling average (the model's baseline)
-        user_line: The user's betting line
-        std_dev: Estimated standard deviation of the stat
-
-    Returns:
-        Adjusted probability of going over the user's line
-    """
-    if std_dev <= 0:
-        std_dev = 1.0
-
-    # Calculate the line difference in standard deviations
-    line_diff = user_line - rolling_avg
-    z_adjustment = line_diff / std_dev
-
-    # Convert base probability to z-score, adjust, and convert back
-    # base_prob = P(X > rolling_avg) = 1 - Phi(0) if centered
-    # We need P(X > user_line) = 1 - Phi(z_adjustment)
-
-    # Use the base probability to infer the player's "form factor"
-    # Then adjust for the line difference
-    if base_prob >= 0.9999:
-        base_z = 3.5
-    elif base_prob <= 0.0001:
-        base_z = -3.5
-    else:
-        # base_prob = P(X > avg) = P(Z > 0 + form_factor)
-        # So form_factor = inverse_norm(base_prob) for the "over" side
-        base_z = norm.ppf(base_prob)
-
-    # Adjusted z-score accounts for line being different from average
-    adjusted_z = base_z - z_adjustment
-
-    # Convert back to probability
-    adjusted_prob = float(norm.cdf(adjusted_z))
-
-    # Clamp to valid probability range
-    return max(0.01, min(0.99, adjusted_prob))

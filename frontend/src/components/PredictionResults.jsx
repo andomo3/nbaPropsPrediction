@@ -72,7 +72,15 @@ const PredictionResults = ({ result }) => {
                     </div>
                     <div className="rounded-2xl bg-secondary/50 border border-border p-5 md:p-6">
                         <p className="text-sm text-muted-foreground uppercase tracking-wider mb-1">Edge</p>
-                        <p className="text-2xl md:text-3xl font-bold text-foreground font-mono">{result.prediction}</p>
+                        <p className={`text-2xl md:text-3xl font-bold font-mono ${
+                            result.edge != null
+                                ? result.edge > 0 ? 'text-primary' : 'text-destructive'
+                                : 'text-foreground'
+                        }`}>
+                            {result.edge != null
+                                ? `${result.edge > 0 ? '+' : ''}${Number(result.edge).toFixed(1)}`
+                                : result.prediction}
+                        </p>
                     </div>
                 </div>
             </div>

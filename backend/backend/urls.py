@@ -4,12 +4,14 @@ from django.contrib import admin
 from django.core.management import call_command
 from django.http import JsonResponse
 from django.urls import include, path
+from django.views.decorators.csrf import csrf_exempt
 
 
 def health(request):
     return JsonResponse({"status": "ok"})
 
 
+@csrf_exempt
 def cron_trigger(request, secret):
     """
     Called daily by cron-job.org to sync ESPN data and generate picks.
