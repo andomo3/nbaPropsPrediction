@@ -302,7 +302,7 @@ const Backtest = () => {
                                 <table className="w-full text-sm">
                                     <thead className="sticky top-0 bg-card border-b border-border">
                                         <tr>
-                                            {['Date', 'Opp', 'Actual', 'Line', 'Prob', '', 'P&L'].map((h) => (
+                                            {['Date', 'Opp', 'Actual', 'Line', 'Proj', '', 'P&L'].map((h) => (
                                                 <th
                                                     key={h}
                                                     className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground"
@@ -323,7 +323,7 @@ const Backtest = () => {
                                                 <td className="px-4 py-2.5 font-medium">{g.actual}</td>
                                                 <td className="px-4 py-2.5 text-muted-foreground">{Number(g.line).toFixed(1)}</td>
                                                 <td className="px-4 py-2.5 text-muted-foreground">
-                                                    {Math.round(g.prob_over * 100)}%
+                                                    {g.projection != null ? Number(g.projection).toFixed(1) : '—'}
                                                 </td>
                                                 <td className="px-4 py-2.5">
                                                     {g.correct ? (
