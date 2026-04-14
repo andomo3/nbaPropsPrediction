@@ -31,9 +31,28 @@ def cron_trigger(request, secret):
         return JsonResponse({"error": str(exc)}, status=500)
 
 
+@csrf_exempt
+def sync_trigger(request, secret, days):
+    """
+    One-shot backfill endpoint. Protected by the same CRON_SECRET.
+    Hit /cron/sync/<secret>/60/ to backfill the last 60 days.
+    """
+    expected = os.getenv("CRON_SECRET", "")
+    if not expected or secret != expected:
+        return JsonResponse({"error": "unauthorized"}, status=401)
+
+    days = max(1, min(int(days), 365))
+    try:
+        call_command("sync_espn_games", days=days)
+        return JsonResponse({"status": "ok", "days_synced": days})
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=500)
+
+
 urlpatterns = [
     path("health/", health, name="health"),
     path("cron/daily/<str:secret>/", cron_trigger, name="cron-trigger"),
+    path("cron/sync/<str:secret>/<int:days>/", sync_trigger, name="sync-trigger"),
     path("admin/", admin.site.urls),
     path("api/", include("nba_betting.urls")),
 ]
