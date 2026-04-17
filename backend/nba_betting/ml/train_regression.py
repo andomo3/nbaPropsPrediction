@@ -319,6 +319,47 @@ def time_split(df: pd.DataFrame, test_frac: float = 0.20) -> Tuple[pd.DataFrame,
     return train.reset_index(drop=True), test.reset_index(drop=True)
 
 
+def walk_forward_splits(
+    df: pd.DataFrame,
+    first_test_year: int = 2021,
+    last_test_year: int = 2024,
+):
+    """
+    Generate season-by-season walk-forward folds for research evaluation.
+
+    Each fold trains on all seasons strictly before test_year and tests on
+    test_year only.  This mirrors real deployment: the model is retrained once
+    per season on all available history.
+
+    Yields:
+        (train_df, test_df, test_year)
+
+    Example folds (default):
+        Train 2016-2020 → Test 2021
+        Train 2016-2021 → Test 2022
+        Train 2016-2022 → Test 2023
+        Train 2016-2023 → Test 2024
+    """
+    if "year" not in df.columns:
+        raise ValueError("DataFrame must have a 'year' column for walk_forward_splits().")
+
+    df = df.copy()
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+
+    for test_year in range(first_test_year, last_test_year + 1):
+        train = df[df["year"] < test_year].reset_index(drop=True)
+        test  = df[df["year"] == test_year].reset_index(drop=True)
+        if train.empty or test.empty:
+            logger.warning(f"  [WF] Skipping fold {test_year}: train={len(train)}, test={len(test)}")
+            continue
+        logger.info(
+            f"  [WF] Fold test_year={test_year} | "
+            f"train={len(train):,} rows ({df[df['year'] < test_year]['year'].min():.0f}–{test_year-1}) | "
+            f"test={len(test):,} rows"
+        )
+        yield train, test, test_year
+
+
 # ── Model training ────────────────────────────────────────────────────────────
 
 def _eval_regression(preds: np.ndarray, actuals: np.ndarray) -> Dict[str, float]:

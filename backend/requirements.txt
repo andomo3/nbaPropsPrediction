@@ -17,3 +17,5 @@ gunicorn>=21.2
 redis>=5.0
 SQLAlchemy>=2.0
 whitenoise>=6.6
+shap>=0.44
+matplotlib>=3.8
