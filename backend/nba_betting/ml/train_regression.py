@@ -230,17 +230,19 @@ def build_player_features(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # ── Season expanding average (shifted, per player per season year) ────────
+    # Derive season_year from the CSV 'year' column if present, else from date.
+    # NBA seasons span two calendar years (Oct–Jun); we use the calendar year of
+    # the game date as a season proxy, which is consistent across both sources.
     if "year" in df.columns:
-        df["year"] = pd.to_numeric(df["year"], errors="coerce")
-        grp_season = df.groupby(["personId", "year"], sort=False)
-        for col, feat in [("points", "pts"), ("reboundsTotal", "reb"), ("assists", "ast")]:
-            df[f"season_avg_{feat}"] = grp_season[col].transform(
-                lambda x: x.shift(1).expanding(min_periods=1).mean()
-            )
+        df["_season_year"] = pd.to_numeric(df["year"], errors="coerce")
     else:
-        # Fallback: use L10 as season proxy
-        for feat in ["pts", "reb", "ast"]:
-            df[f"season_avg_{feat}"] = df[f"{feat}_L10"]
+        df["_season_year"] = pd.to_datetime(df["date"]).dt.year
+
+    grp_season = df.groupby(["personId", "_season_year"], sort=False)
+    for col, feat in [("points", "pts"), ("reboundsTotal", "reb"), ("assists", "ast")]:
+        df[f"season_avg_{feat}"] = grp_season[col].transform(
+            lambda x: x.shift(1).expanding(min_periods=1).mean()
+        )
 
     # ── Hot / cold streak ─────────────────────────────────────────────────────
     for feat in ["pts", "reb", "ast"]:
@@ -341,7 +343,10 @@ def walk_forward_splits(
         Train 2016-2023 → Test 2024
     """
     if "year" not in df.columns:
-        raise ValueError("DataFrame must have a 'year' column for walk_forward_splits().")
+        if "date" not in df.columns:
+            raise ValueError("DataFrame must have a 'year' or 'date' column for walk_forward_splits().")
+        df = df.copy()
+        df["year"] = pd.to_datetime(df["date"]).dt.year
 
     df = df.copy()
     df["year"] = pd.to_numeric(df["year"], errors="coerce")
