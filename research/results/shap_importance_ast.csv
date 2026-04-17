@@ -1,0 +1,14 @@
+feature,mean_abs_shap
+ast_L10,0.77020437
+season_avg_ast,0.4059062
+ast_ema_L5,0.24709763
+is_home,0.0934253
+opp_ast_allowed_L10,0.0887379
+min_L5,0.043410253
+pts_L5,0.032087658
+ast_L5,0.025226753
+days_rest,0.02115787
+hot_cold_ast,0.009219611
+min_L10,0.006336941
+fg_pct_L5,0.0053992216
+ast_std_L10,0.005178918

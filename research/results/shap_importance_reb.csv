@@ -1,0 +1,13 @@
+feature,mean_abs_shap
+reb_L10,0.93070704
+season_avg_reb,0.6432276
+reb_ema_L5,0.3670316
+min_L5,0.18517824
+min_L10,0.15873608
+is_home,0.10460091
+opp_reb_allowed_L10,0.075084046
+days_rest,0.0629476
+reb_L5,0.05130178
+pts_L5,0.037784863
+hot_cold_reb,0.035396587
+reb_std_L10,0.018588616

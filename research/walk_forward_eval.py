@@ -53,8 +53,10 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Naive L5 feature name per stat
 NAIVE_L5_FEATURE = {"pts": "pts_L5", "reb": "reb_L5", "ast": "ast_L5"}
-# Line proxy (synthetic market line) per stat — used by betting simulation
+# Primary synthetic line: L10 rolling average
 LINE_PROXY_FEATURE = {"pts": "pts_L10", "reb": "reb_L10", "ast": "ast_L10"}
+# Secondary synthetic line: EMA-5 (momentum-weighted, more market-realistic)
+EMA_LINE_FEATURE   = {"pts": "pts_ema_L5", "reb": "reb_ema_L5", "ast": "ast_ema_L5"}
 
 
 def _mae_rmse(actual: np.ndarray, pred: np.ndarray):
@@ -80,8 +82,9 @@ def evaluate_fold(
     feats = FEATURE_COLUMNS[stat]
     naive_feat = NAIVE_L5_FEATURE[stat]
     line_feat  = LINE_PROXY_FEATURE[stat]
+    ema_feat   = EMA_LINE_FEATURE[stat]
 
-    cols_needed = feats + [target_col, naive_feat, line_feat, "personId", "date"]
+    cols_needed = feats + [target_col, naive_feat, line_feat, ema_feat, "personId", "date"]
     # date may already be in feats for some paths — deduplicate
     cols_needed = list(dict.fromkeys(cols_needed))
 
@@ -151,6 +154,7 @@ def evaluate_fold(
         "stat":         stat,
         "actual":       y_test,
         "line_proxy":   stat_test[line_feat].values.astype(np.float32),
+        "ema_line":     stat_test[ema_feat].values.astype(np.float32),
         "naive_l5_pred": naive_pred,
         "linear_pred":  lr_pred,
         "rf_pred":      rf_pred,

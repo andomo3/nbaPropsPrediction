@@ -75,7 +75,10 @@ def run_shap_analysis(csv_path: str | None = None):
     logger.info("Building opponent defense features ...")
     df = build_opponent_defense(df)
 
-    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    if "year" in df.columns:
+        df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    else:
+        df["year"] = pd.to_datetime(df["date"]).dt.year
 
     for stat, target_col in STAT_TARGET.items():
         logger.info(f"\n{'─'*60}")

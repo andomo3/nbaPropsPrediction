@@ -2,22 +2,26 @@
 Flat-Unit Betting Simulation for NBA Player Props.
 
 Reads walk_forward_predictions.csv produced by walk_forward_eval.py and
-simulates betting on OVER/UNDER using the XGBoost model's edge against a
-synthetic market line (player's L10 rolling average).
+simulates betting on OVER/UNDER using the XGBoost model's edge against
+synthetic market lines.
+
+Two synthetic lines are tested (robustness check):
+  - L10    : player's 10-game simple rolling average (naive baseline)
+  - EMA    : player's 5-game exponential moving average (momentum-weighted,
+             closer to how sportsbooks adjust lines for recent form)
+
+If the model's edge holds against the EMA line (which already prices in
+momentum), the model is finding structure beyond simple recency.
 
 Betting logic:
-  - Bet OVER  when xgb_pred > line_proxy + threshold
-  - Bet UNDER when xgb_pred < line_proxy - threshold
+  - Bet OVER  when xgb_pred > line + threshold
+  - Bet UNDER when xgb_pred < line - threshold
   - Payout: -110 juice → win = +0.909u, loss = -1.0u
   - Break-even win rate = 52.38%
 
-Thresholds tested: 0.0, 0.5, 1.0, 1.5, 2.0, 2.5 (in stat units)
-
 Outputs:
-  research/results/betting_summary.csv      — ROI/win-rate by stat + threshold
-  research/figures/pnl_curve_pts.png        — cumulative P&L over time (pts)
-  research/figures/pnl_curve_reb.png
-  research/figures/pnl_curve_ast.png
+  research/results/betting_summary.csv      — ROI/win-rate by stat × threshold × line
+  research/figures/pnl_curve_{stat}_{line}.png — cumulative P&L over time
 
 Usage:
     cd <repo_root>
@@ -52,18 +56,26 @@ LOSS_PAYOUT = -1.0
 BREAKEVEN   = 0.5238   # 52.38% required at -110
 THRESHOLDS  = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5]
 
+# Maps "line type" → CSV column name in walk_forward_predictions.csv
+LINE_COLUMNS = {
+    "l10":    "line_proxy",    # naive 10-game rolling average
+    "ema":    "ema_line",      # 5-game exponential moving average
+    "linreg": "linear_pred",   # LinearRegression prediction — same features, simpler model
+}
 
-def simulate_bets(df: pd.DataFrame, threshold: float) -> pd.DataFrame:
+
+def simulate_bets(df: pd.DataFrame, threshold: float, line_col: str) -> pd.DataFrame:
     """
-    Return a DataFrame of individual bets for a given edge threshold.
+    Return a DataFrame of individual bets for a given edge threshold and line.
 
-    Columns: game_date, stat, actual, line_proxy, xgb_pred,
+    Columns: game_date, stat, actual, line, xgb_pred,
              edge, bet_direction, correct, pnl
     """
     df = df.copy()
-    df["edge"] = df["xgb_pred"] - df["line_proxy"]
+    df["line"] = df[line_col]
+    df = df.dropna(subset=["line"])
+    df["edge"] = df["xgb_pred"] - df["line"]
 
-    # Bet OVER when edge > threshold, UNDER when edge < -threshold
     over_mask  = df["edge"] >  threshold
     under_mask = df["edge"] < -threshold
     bet_mask   = over_mask | under_mask
@@ -71,27 +83,26 @@ def simulate_bets(df: pd.DataFrame, threshold: float) -> pd.DataFrame:
     bets = df[bet_mask].copy()
     bets["bet_direction"] = np.where(bets["edge"] > 0, "OVER", "UNDER")
 
-    # Determine if bet won
-    over_won  = (bets["bet_direction"] == "OVER")  & (bets["actual"] > bets["line_proxy"])
-    under_won = (bets["bet_direction"] == "UNDER") & (bets["actual"] < bets["line_proxy"])
-    # Push when actual == line_proxy: counts as loss (conservative)
+    over_won  = (bets["bet_direction"] == "OVER")  & (bets["actual"] > bets["line"])
+    under_won = (bets["bet_direction"] == "UNDER") & (bets["actual"] < bets["line"])
     bets["correct"] = over_won | under_won
     bets["pnl"]     = np.where(bets["correct"], WIN_PAYOUT, LOSS_PAYOUT)
 
-    return bets[["game_date", "stat", "actual", "line_proxy", "xgb_pred",
+    return bets[["game_date", "stat", "actual", "line", "xgb_pred",
                  "edge", "bet_direction", "correct", "pnl"]]
 
 
-def summarize_bets(bets: pd.DataFrame, stat: str, threshold: float) -> dict:
+def summarize_bets(bets: pd.DataFrame, stat: str, threshold: float, line_type: str) -> dict:
     if bets.empty:
         return {}
     n_bets    = len(bets)
     n_won     = bets["correct"].sum()
     win_rate  = n_won / n_bets
     total_pnl = bets["pnl"].sum()
-    roi       = total_pnl / n_bets   # return per unit risked
+    roi       = total_pnl / n_bets
     return {
         "stat":          stat,
+        "line_type":     line_type,
         "threshold":     threshold,
         "n_bets":        n_bets,
         "n_won":         int(n_won),
@@ -101,9 +112,9 @@ def summarize_bets(bets: pd.DataFrame, stat: str, threshold: float) -> dict:
     }
 
 
-def plot_pnl_curve(all_bets_df: pd.DataFrame, stat: str, best_threshold: float):
-    """Plot cumulative P&L over time for the best-performing threshold."""
-    bets = simulate_bets(all_bets_df[all_bets_df["stat"] == stat], best_threshold)
+def plot_pnl_curve(all_preds: pd.DataFrame, stat: str, line_type: str, best_threshold: float):
+    line_col = LINE_COLUMNS[line_type]
+    bets = simulate_bets(all_preds[all_preds["stat"] == stat], best_threshold, line_col)
     if bets.empty:
         return
 
@@ -119,10 +130,10 @@ def plot_pnl_curve(all_bets_df: pd.DataFrame, stat: str, best_threshold: float):
     ax.fill_between(pd.to_datetime(bets["game_date"]), bets["cum_pnl"], 0,
                     where=bets["cum_pnl"] < 0,  alpha=0.15, color="#ef4444")
 
-    final_pnl  = bets["cum_pnl"].iloc[-1]
-    win_rate   = bets["correct"].mean()
+    final_pnl = bets["cum_pnl"].iloc[-1]
+    win_rate  = bets["correct"].mean()
     ax.set_title(
-        f"Cumulative P&L — {stat.upper()} | Threshold ±{best_threshold} | "
+        f"Cumulative P&L — {stat.upper()} | Line: {line_type.upper()} | Threshold ±{best_threshold} | "
         f"{len(bets):,} bets | Win rate: {win_rate:.1%} | Final: {final_pnl:+.1f}u",
         fontsize=11,
     )
@@ -131,10 +142,10 @@ def plot_pnl_curve(all_bets_df: pd.DataFrame, stat: str, best_threshold: float):
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
 
-    out = FIGURES_DIR / f"pnl_curve_{stat}.png"
+    out = FIGURES_DIR / f"pnl_curve_{stat}_{line_type}.png"
     fig.savefig(out, dpi=150)
     plt.close(fig)
-    logger.info(f"  P&L curve saved → {out}")
+    logger.info(f"    P&L curve saved → {out}")
 
 
 def run_simulation(predictions_path: str | None = None):
@@ -142,7 +153,7 @@ def run_simulation(predictions_path: str | None = None):
         predictions_path = str(RESULTS_DIR / "walk_forward_predictions.csv")
 
     logger.info("=" * 60)
-    logger.info("Betting Simulation")
+    logger.info("Betting Simulation (L10 + EMA Robustness Check)")
     logger.info("=" * 60)
 
     if not Path(predictions_path).exists():
@@ -155,48 +166,78 @@ def run_simulation(predictions_path: str | None = None):
     preds = pd.read_csv(predictions_path, parse_dates=["game_date"])
     logger.info(f"Loaded {len(preds):,} prediction rows from {predictions_path}")
 
+    available_lines = [lt for lt, col in LINE_COLUMNS.items() if col in preds.columns]
+    missing = [lt for lt in LINE_COLUMNS if lt not in available_lines]
+    if missing:
+        logger.warning(
+            f"Line types {missing} unavailable — missing columns in predictions CSV. "
+            "Re-run walk_forward_eval.py to regenerate."
+        )
+    logger.info(f"Evaluating line types: {available_lines}")
+
     summary_rows = []
 
-    for stat in ["pts", "reb", "ast"]:
-        stat_df = preds[preds["stat"] == stat].copy()
-        logger.info(f"\n{'─'*50}")
-        logger.info(f"  Stat: {stat.upper()}  ({len(stat_df):,} games)")
+    for line_type in available_lines:
+        line_col = LINE_COLUMNS[line_type]
+        logger.info(f"\n{'═'*60}")
+        logger.info(f"  Line type: {line_type.upper()}  (column={line_col})")
+        logger.info("═" * 60)
 
-        stat_summaries = []
-        for threshold in THRESHOLDS:
-            bets = simulate_bets(stat_df, threshold)
-            row  = summarize_bets(bets, stat, threshold)
-            if row:
-                stat_summaries.append(row)
-                logger.info(
-                    f"    threshold={threshold:.1f}  "
-                    f"n_bets={row['n_bets']:,}  "
-                    f"win_rate={row['win_rate']:.1%}  "
-                    f"ROI={row['roi']:+.3f}  "
-                    f"P&L={row['cumulative_pnl']:+.1f}u"
-                )
+        for stat in ["pts", "reb", "ast"]:
+            stat_df = preds[preds["stat"] == stat].copy()
+            logger.info(f"\n  ── Stat: {stat.upper()}  ({len(stat_df):,} games)")
 
-        summary_rows.extend(stat_summaries)
+            stat_summaries = []
+            for threshold in THRESHOLDS:
+                bets = simulate_bets(stat_df, threshold, line_col)
+                row  = summarize_bets(bets, stat, threshold, line_type)
+                if row:
+                    stat_summaries.append(row)
+                    logger.info(
+                        f"    threshold={threshold:.1f}  "
+                        f"n_bets={row['n_bets']:>6,}  "
+                        f"win_rate={row['win_rate']:.1%}  "
+                        f"ROI={row['roi']:+.3f}  "
+                        f"P&L={row['cumulative_pnl']:+.1f}u"
+                    )
 
-        # Plot P&L for the threshold with best ROI
-        if stat_summaries:
-            best = max(stat_summaries, key=lambda x: x["roi"])
-            plot_pnl_curve(preds, stat, best["threshold"])
+            summary_rows.extend(stat_summaries)
+
+            # Plot P&L for the best threshold (by ROI) with >= 100 bets
+            valid = [s for s in stat_summaries if s["n_bets"] >= 100]
+            if valid:
+                best = max(valid, key=lambda x: x["roi"])
+                plot_pnl_curve(preds, stat, line_type, best["threshold"])
 
     summary_df = pd.DataFrame(summary_rows)
     out_path = RESULTS_DIR / "betting_summary.csv"
     summary_df.to_csv(out_path, index=False)
     logger.info(f"\nBetting summary saved → {out_path}")
 
-    # ── Print ROI table ───────────────────────────────────────────────────────
-    logger.info("\n" + "=" * 60)
-    logger.info("ROI by Stat × Threshold")
-    logger.info("=" * 60)
-    pivot = summary_df.pivot_table(
-        index="threshold", columns="stat", values="roi", aggfunc="first"
-    ).round(4)
-    logger.info("\n" + pivot.to_string())
-    logger.info(f"\nBreak-even ROI at -110 juice: {BREAKEVEN - 1:.4f} ({BREAKEVEN:.2%} win rate)")
+    # ── Print comparison table ────────────────────────────────────────────────
+    logger.info("\n" + "═" * 60)
+    logger.info("ROI Comparison across all synthetic lines")
+    logger.info("═" * 60)
+    for stat in ["pts", "reb", "ast"]:
+        sub = summary_df[summary_df["stat"] == stat]
+        if sub.empty:
+            continue
+        pivot = sub.pivot_table(
+            index="threshold", columns="line_type", values="roi", aggfunc="first"
+        ).round(4)
+        # Reorder columns: weakest line on left, strongest on right
+        col_order = [c for c in ["l10", "ema", "linreg"] if c in pivot.columns]
+        pivot = pivot[col_order]
+        logger.info(f"\n  {stat.upper()}:\n{pivot.to_string()}")
+
+    logger.info(f"\nBreak-even at -110 juice: {BREAKEVEN:.2%} win rate")
+    logger.info("\nInterpretation:")
+    logger.info("  - L10 line: naive 10-game rolling average (simple recency).")
+    logger.info("  - EMA line: 5-game exponential moving average (momentum-weighted).")
+    logger.info("  - LinReg line: LinearRegression prediction using identical features.")
+    logger.info("    → XGBoost vs LinReg tests whether non-linear model capacity adds")
+    logger.info("      value beyond what a simpler model extracts from the same features.")
+    logger.info("      This is the most conservative robustness check.")
 
     return summary_df
 
