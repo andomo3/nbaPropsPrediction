@@ -14,9 +14,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.db.models import Q
+from scipy.stats import norm
 
 from nba_betting.ml.predictor import ModelPredictor
 from nba_betting.models import DailyPick, Game, Player
@@ -111,20 +110,19 @@ class Command(BaseCommand):
 
             opponent_abbr, is_home = schedule[team_abbr]
 
-            player_obj, feature_row = get_model_inputs(
-                player_name, opponent_abbr, is_home
-            )
-            if player_obj is None:
-                self.stdout.write(
-                    f"  [SKIP] {player_name} — feature build failed: {feature_row}"
-                )
-                skipped += 1
-                continue
-
             for stat in STATS:
                 try:
-                    prob_over = predictor.predict_probability(feature_row, stat, "xgb")
-                    if prob_over is None:
+                    player_obj, feature_row = get_model_inputs(
+                        player_name, opponent_abbr, is_home, stat=stat
+                    )
+                    if player_obj is None:
+                        self.stdout.write(
+                            f"  [SKIP] {player_name} {stat} — feature build failed: {feature_row}"
+                        )
+                        continue
+
+                    projection = predictor.predict_projection(feature_row, stat, "xgb")
+                    if projection is None:
                         continue
 
                     line_col = f"{stat}_L5"
@@ -132,7 +130,16 @@ class Command(BaseCommand):
                         continue
 
                     line = float(feature_row[line_col].iloc[0])
-                    edge = "Over" if prob_over >= 0.5 else "Under"
+                    std_col = f"{stat}_std_L10"
+                    std_dev = (
+                        float(feature_row[std_col].iloc[0])
+                        if std_col in feature_row.columns
+                        else {"pts": 6.1, "reb": 2.6, "ast": 1.8}[stat]
+                    )
+                    prob_over = float(max(0.01, min(0.99,
+                        1 - norm.cdf((line - projection) / max(std_dev, 0.5))
+                    )))
+                    edge = "Over" if projection > line else "Under"
 
                     if not dry_run:
                         DailyPick.objects.update_or_create(
@@ -143,8 +150,8 @@ class Command(BaseCommand):
                                 "opponent_abbr": opponent_abbr,
                                 "is_home": is_home,
                                 "line": round(line, 2),
-                                "prob_over": round(float(prob_over), 4),
-                                "projection": round(line, 2),
+                                "prob_over": round(prob_over, 4),
+                                "projection": round(float(projection), 2),
                                 "edge": edge,
                                 "model_version": "xgb_v1",
                             },
@@ -153,7 +160,8 @@ class Command(BaseCommand):
                     self.stdout.write(
                         f"  [PICK] {player_name} {stat.upper()} "
                         f"{'vs' if not is_home else '@'} {opponent_abbr} — "
-                        f"{edge} {line:.1f} ({prob_over*100:.0f}%)"
+                        f"{edge} {line:.1f} (proj={projection:.1f}, "
+                        f"prob={prob_over*100:.0f}%)"
                     )
                     generated += 1
 
