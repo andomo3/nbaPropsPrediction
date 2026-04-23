@@ -20,6 +20,7 @@ from scipy.stats import norm
 from nba_betting.ml.predictor import ModelPredictor
 from nba_betting.models import DailyPick, Game, Player
 from nba_betting.services.features import _find_player, get_model_inputs
+from nba_betting.utils.dates import et_today
 
 # ------------------------------------------------------------------
 # LITE player list — top 20 by market popularity
@@ -67,7 +68,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         pick_date = (
-            date.fromisoformat(options["date"]) if options["date"] else date.today()
+            date.fromisoformat(options["date"]) if options["date"] else et_today()
         )
         dry_run = options["dry_run"]
 
