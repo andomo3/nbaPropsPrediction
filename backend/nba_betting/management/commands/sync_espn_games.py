@@ -28,6 +28,7 @@ import requests
 from django.core.management.base import BaseCommand, CommandError
 
 from nba_betting.models import Game, Player, PlayerStats, Team
+from nba_betting.utils.dates import et_today
 
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
 SUMMARY_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary"
@@ -62,7 +63,7 @@ class Command(BaseCommand):
         end_date = (
             datetime.strptime(options["date"], "%Y%m%d").date()
             if options["date"]
-            else date.today()
+            else et_today()
         )
         days = max(1, options["days"])
         dates = [end_date - timedelta(days=i) for i in range(days - 1, -1, -1)]

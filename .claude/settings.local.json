@@ -9,7 +9,18 @@
       "Bash(docker-compose up:*)",
       "Bash(curl -s -X POST \"http://localhost:8000/api/backtest/\" -H \"Content-Type: application/json\" -d \"{\"\"player_name\"\":\"\"LeBron James\"\",\"\"stat\"\":\"\"pts\"\",\"\"date_from\"\":\"\"2023-01-01\"\",\"\"date_to\"\":\"\"2023-06-01\"\"}\")",
       "Bash(python -c \"import secrets; print\\(secrets.token_urlsafe\\(50\\)\\)\")",
-      "Bash(du -sh data/models/*)"
+      "Bash(du -sh data/models/*)",
+      "Bash(python -c \":*)",
+      "Bash(pip install:*)",
+      "Bash(xargs grep:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "WebSearch",
+      "Bash(git commit -m ' *)",
+      "Bash(python research/_build_notebook.py)",
+      "Bash(python -c \"import json; nb=json.load\\(open\\('research/nba_prop_prediction_walkthrough.ipynb', encoding='utf-8'\\)\\); print\\('cells:', len\\(nb['cells']\\)\\); print\\('types:', [c['cell_type'] for c in nb['cells']]\\)\")",
+      "Bash(python -c \"from nba_betting.utils.dates import et_today; print\\('ET today:', et_today\\(\\)\\)\")"
     ]
   }
 }

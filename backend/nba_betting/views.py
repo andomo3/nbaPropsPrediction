@@ -11,6 +11,7 @@ from .ml.predictor import get_predictor
 from .models import DailyPick, Player
 from .services.backtest import run_backtest
 from .services.features import get_model_inputs
+from .utils.dates import et_today
 
 
 class PlayerListView(APIView):
@@ -161,7 +162,7 @@ class LitePicksView(APIView):
         stat = request.query_params.get("stat", "pts").lower().strip()
 
         try:
-            pick_date = date.fromisoformat(date_str) if date_str else date.today()
+            pick_date = date.fromisoformat(date_str) if date_str else et_today()
         except ValueError:
             return Response(
                 {"detail": "Invalid date format. Use YYYY-MM-DD."},
