@@ -114,7 +114,7 @@ class Command(BaseCommand):
             for stat in STATS:
                 try:
                     player_obj, feature_row = get_model_inputs(
-                        player_name, opponent_abbr, is_home, stat=stat
+                        player_name, opponent_abbr, stat, is_home=is_home
                     )
                     if player_obj is None:
                         self.stdout.write(
