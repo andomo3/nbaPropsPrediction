@@ -20,7 +20,8 @@
       "Bash(git commit -m ' *)",
       "Bash(python research/_build_notebook.py)",
       "Bash(python -c \"import json; nb=json.load\\(open\\('research/nba_prop_prediction_walkthrough.ipynb', encoding='utf-8'\\)\\); print\\('cells:', len\\(nb['cells']\\)\\); print\\('types:', [c['cell_type'] for c in nb['cells']]\\)\")",
-      "Bash(python -c \"from nba_betting.utils.dates import et_today; print\\('ET today:', et_today\\(\\)\\)\")"
+      "Bash(python -c \"from nba_betting.utils.dates import et_today; print\\('ET today:', et_today\\(\\)\\)\")",
+      "Bash(python -c ' *)"
     ]
   }
 }

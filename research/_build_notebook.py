@@ -160,6 +160,13 @@ cells.append(md(r"""## 3. Load & filter
 It also derives `is_home`, `fg_pct`, and a normalized `date` column."""))
 
 cells.append(code(r"""df_filtered = load_and_filter_csv(str(CSV_PATH))
+
+# The CSV stores names as separate firstName / lastName columns.
+# Combine them into a single personName column for display purposes.
+df_filtered["personName"] = (
+    df_filtered["firstName"].fillna("") + " " + df_filtered["lastName"].fillna("")
+).str.strip()
+
 print(f"After filtering: {len(df_filtered):,} rows")
 print(f"Players:         {df_filtered['personId'].nunique():,}")
 print(f"Year range:      {df_filtered['date'].dt.year.min()}–{df_filtered['date'].dt.year.max()}")
@@ -183,7 +190,7 @@ Let's watch these build for a single player."""))
 cells.append(code(r"""df_feat = build_player_features(df_filtered.copy())
 print(f"Columns after player features: {len(df_feat.columns)}")
 
-# Pick a recognizable player; fall back if name differs
+# personName was derived in Section 3; it carries through on the copied df.
 target_name = "LeBron James"
 if target_name not in df_feat["personName"].unique():
     target_name = df_feat["personName"].value_counts().index[0]
@@ -269,7 +276,8 @@ feats = FEATURE_COLUMNS[stat]
 # Grab fold 1 only
 fold1 = next(iter(walk_forward_splits(df_feat, first_test_year=2021, last_test_year=2021)))
 train_df, test_df, year = fold1
-cols_needed = feats + [target_col, "pts_L5"]
+# pts_L5 is already inside feats; deduplicate to avoid duplicate columns
+cols_needed = list(dict.fromkeys(feats + [target_col, "pts_L5"]))
 tr = train_df[cols_needed].dropna()
 te = test_df[cols_needed].dropna()
 
