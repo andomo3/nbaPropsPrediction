@@ -28,6 +28,7 @@ SEASON_DATES: dict[int, tuple[date, date]] = {
     2023: (date(2022, 10, 18), date(2023, 6, 12)),
     2024: (date(2023, 10, 24), date(2024, 6, 17)),
     2025: (date(2024, 10, 22), date(2025, 6, 22)),
+    2026: (date(2025, 10, 22), date(2026, 6, 20)),
 }
 
-DEFAULT_SEASON = 2024
+DEFAULT_SEASON = 2026

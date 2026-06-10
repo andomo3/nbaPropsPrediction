@@ -43,6 +43,7 @@ const STATS = [
 ];
 
 const SEASONS = [
+    { value: '2026', label: '2025-26' },
     { value: '2025', label: '2024-25' },
     { value: '2024', label: '2023-24' },
     { value: '2023', label: '2022-23' },
@@ -122,7 +123,7 @@ function ActualVsProjectionTooltip({ active, payload, label }) {
 const SeasonReport = () => {
     const [player, setPlayer] = useState(PLAYERS[0]);
     const [stat, setStat] = useState('pts');
-    const [season, setSeason] = useState('2024');
+    const [season, setSeason] = useState('2026');
 
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -141,7 +142,13 @@ const SeasonReport = () => {
         });
 
         fetch(`${API_BASE}/api/backtest/season-summary/?${params}`)
-            .then((res) => res.json().then((json) => ({ ok: res.ok, json })))
+            .then((res) => {
+                const contentType = res.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error(`Server error (HTTP ${res.status})`);
+                }
+                return res.json().then((json) => ({ ok: res.ok, json }));
+            })
             .then(({ ok, json }) => {
                 if (!ok) throw new Error(json.detail || 'Request failed');
                 setData(json);
