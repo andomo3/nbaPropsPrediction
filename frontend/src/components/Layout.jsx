@@ -20,6 +20,7 @@ const Layout = () => {
                         links: [
                             { label: 'Daily Picks', href: '/picks' },
                             { label: 'Backtesting', href: '/backtest' },
+                            { label: 'Season Report', href: '/season-report' },
                         ],
                     },
                     {
