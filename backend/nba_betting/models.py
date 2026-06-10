@@ -131,6 +131,7 @@ class BacktestResult(models.Model):
     predicted_over = models.BooleanField()
     correct = models.BooleanField()
     pnl = models.FloatField(help_text="+1.0 if correct, -1.1 if wrong (simulates -110 odds)")
+    error = models.FloatField(default=0.0, help_text="actual - projection (signed prediction error)")
 
     class Meta:
         ordering = ["game_date"]

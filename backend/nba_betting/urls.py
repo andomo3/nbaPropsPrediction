@@ -8,4 +8,5 @@ urlpatterns = [
     path("predict/manual/", views.ManualPredictionView.as_view(), name="manual-prediction"),
     path("picks/", views.LitePicksView.as_view(), name="lite-picks"),
     path("backtest/", views.BacktestView.as_view(), name="backtest"),
+    path("backtest/season-summary/", views.SeasonSummaryView.as_view(), name="season-summary"),
 ]
