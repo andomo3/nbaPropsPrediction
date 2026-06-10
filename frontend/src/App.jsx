@@ -6,6 +6,7 @@ import Overview from './components/Overview';
 import AboutUs from './components/AboutUs';
 import DailyPicks from './components/DailyPicks';
 import Backtest from './components/Backtest';
+import SeasonReport from './components/SeasonReport';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route path="about" element={<AboutUs />} />
           <Route path="picks" element={<DailyPicks />} />
           <Route path="backtest" element={<Backtest />} />
+          <Route path="season-report" element={<SeasonReport />} />
         </Route>
       </Routes>
     </BrowserRouter>
