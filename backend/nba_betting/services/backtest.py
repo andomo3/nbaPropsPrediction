@@ -172,6 +172,8 @@ def run_backtest(
         pnl            = WIN_UNIT if correct else LOSS_UNIT
         cumulative_pnl += pnl
 
+        error = round(actual - projection, 2)
+
         # Store projection in prob_over field (repurposed for regression output)
         per_game_rows.append({
             "date":           str(game_date),
@@ -183,6 +185,7 @@ def run_backtest(
             "predicted_over": predicted_over,
             "correct":        correct,
             "pnl":            pnl,
+            "error":          error,
             "cumulative_pnl": round(cumulative_pnl, 2),
         })
 
@@ -220,6 +223,7 @@ def run_backtest(
             predicted_over=r["predicted_over"],
             correct=r["correct"],
             pnl=r["pnl"],
+            error=r["error"],
         )
         for r in per_game_rows
     ])
@@ -371,6 +375,7 @@ def _serialize_run(run: BacktestRun) -> dict[str, Any]:
             "predicted_over": r.predicted_over,
             "correct":        r.correct,
             "pnl":            r.pnl,
+            "error":          r.error,
             "cumulative_pnl": round(cumulative, 2),
         })
 

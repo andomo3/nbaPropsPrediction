@@ -7,8 +7,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from scipy.stats import norm
 
+from .constants import DEFAULT_SEASON, SEASON_DATES, SEASON_REPORT_PLAYERS
 from .ml.predictor import get_predictor
-from .models import DailyPick, Player
+from .models import BacktestRun, DailyPick, Player
 from .services.backtest import run_backtest
 from .services.features import get_model_inputs
 from .utils.dates import et_today
@@ -276,5 +277,175 @@ class BacktestView(APIView):
             )
 
         return Response(result)
+
+
+class SeasonSummaryView(APIView):
+    """
+    GET /api/backtest/season-summary/?player_name=Nikola+Jokic&stat=pts&season=2024
+
+    Returns pre-seeded Season Report Card data for one player + stat.
+    Data must exist in the DB (run seed_season_backtest first).
+
+    Query params:
+        player_name  (required) — must be one of the 10 seed players
+        stat         (required) — pts | reb | ast
+        season       (optional) — NBA season end-year, default 2024
+
+    Response shape:
+        {
+            "player_name": "Nikola Jokic",
+            "stat": "pts",
+            "season": "2023-24",
+            "date_from": "2023-10-24",
+            "date_to": "2024-06-17",
+            "summary": {
+                "total_games": 74,
+                "mae": 4.21,        // mean absolute error
+                "bias": -0.34,      // mean signed error (+ = under-projected)
+                "hit_rate": 0.568,  // fraction of games where over/under was correct
+                "total_pnl": 2.40,
+                "roi": 2.9          // % return on investment at -110 odds
+            },
+            "per_game": [
+                {
+                    "date": "2023-10-25",
+                    "opponent": "PHX",
+                    "actual": 34.0,
+                    "line": 27.2,
+                    "projection": 29.1,
+                    "error": 4.9,
+                    "correct": true,
+                    "pnl": 1.0,
+                    "cumulative_pnl": 1.0
+                },
+                ...
+            ]
+        }
+    """
+
+    def get(self, request):
+        player_name = request.query_params.get("player_name", "").strip()
+        stat = request.query_params.get("stat", "").lower().strip()
+        season_str = request.query_params.get("season", str(DEFAULT_SEASON))
+
+        # ── Validate inputs ───────────────────────────────────────────────────
+        if not player_name:
+            return Response(
+                {"detail": "player_name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if stat not in ("pts", "reb", "ast"):
+            return Response(
+                {"detail": "stat must be one of: pts, reb, ast"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            season_year = int(season_str)
+        except ValueError:
+            return Response(
+                {"detail": "season must be an integer year (e.g. 2024)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if season_year not in SEASON_DATES:
+            return Response(
+                {
+                    "detail": (
+                        f"Season {season_year} is not supported. "
+                        f"Available: {sorted(SEASON_DATES.keys())}"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate player is one of the seed list (case-insensitive match)
+        matched_name = next(
+            (p for p in SEASON_REPORT_PLAYERS if p.lower() == player_name.lower()),
+            None,
+        )
+        if not matched_name:
+            return Response(
+                {
+                    "detail": (
+                        f"{player_name!r} is not in the Season Report Card roster. "
+                        f"Available players: {SEASON_REPORT_PLAYERS}"
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        date_from, date_to = SEASON_DATES[season_year]
+        season_label = f"{season_year - 1}-{season_year % 100:02d}"
+
+        # ── Fetch cached run ──────────────────────────────────────────────────
+        run = (
+            BacktestRun.objects.filter(
+                player_name=matched_name,
+                stat=stat,
+                date_from=date_from,
+                date_to=date_to,
+                total_bets__gt=0,
+            )
+            .prefetch_related("results")
+            .first()
+        )
+
+        if run is None:
+            return Response(
+                {
+                    "detail": (
+                        f"No seeded data found for {matched_name} / {stat} / {season_label}. "
+                        "Run: python manage.py seed_season_backtest"
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # ── Build per-game array + compute derived stats ──────────────────────
+        results = list(run.results.all())   # already ordered by game_date
+
+        per_game = []
+        cumulative_pnl = 0.0
+        error_sum = 0.0
+        abs_error_sum = 0.0
+
+        for r in results:
+            cumulative_pnl = round(cumulative_pnl + r.pnl, 2)
+            error_sum += r.error
+            abs_error_sum += abs(r.error)
+            per_game.append({
+                "date":           str(r.game_date),
+                "opponent":       r.opponent,
+                "actual":         r.actual,
+                "line":           r.line,
+                "projection":     r.prob_over,   # stored in prob_over for backward compat
+                "error":          round(r.error, 2),
+                "correct":        r.correct,
+                "pnl":            r.pnl,
+                "cumulative_pnl": cumulative_pnl,
+            })
+
+        n = len(results)
+        mae  = round(abs_error_sum / n, 3) if n else 0.0
+        bias = round(error_sum / n, 3) if n else 0.0
+
+        return Response({
+            "player_name": matched_name,
+            "stat":        stat,
+            "season":      season_label,
+            "date_from":   str(date_from),
+            "date_to":     str(date_to),
+            "summary": {
+                "total_games": run.total_bets,
+                "mae":         mae,
+                "bias":        bias,
+                "hit_rate":    round(run.accuracy, 4),
+                "total_pnl":   round(run.total_pnl, 2),
+                "roi":         round(run.roi, 2),
+            },
+            "per_game": per_game,
+        })
 
 
