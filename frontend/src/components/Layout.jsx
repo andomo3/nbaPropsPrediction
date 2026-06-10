@@ -9,18 +9,10 @@ const Layout = () => {
                 logoText="PropEdge"
                 items={[
                     {
-                        label: 'Predictions',
+                        label: 'Analytics',
                         links: [
-                            { label: 'Scenario', href: '/#predictions' },
-                            { label: 'Outputs', href: '/overview' },
-                        ],
-                    },
-                    {
-                        label: 'Tools',
-                        links: [
-                            { label: 'Daily Picks', href: '/picks' },
-                            { label: 'Backtesting', href: '/backtest' },
                             { label: 'Season Report', href: '/season-report' },
+                            { label: 'Model Overview', href: '/overview' },
                         ],
                     },
                     {
