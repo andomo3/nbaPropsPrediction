@@ -9,4 +9,7 @@ urlpatterns = [
     path("picks/", views.LitePicksView.as_view(), name="lite-picks"),
     path("backtest/", views.BacktestView.as_view(), name="backtest"),
     path("backtest/season-summary/", views.SeasonSummaryView.as_view(), name="season-summary"),
+    path("backtest/model-comparison/", views.ModelComparisonView.as_view(), name="model-comparison"),
+    path("backtest/leaderboard/", views.LeaderboardView.as_view(), name="leaderboard"),
+    path("simulator/", views.SimulatorView.as_view(), name="simulator"),
 ]
