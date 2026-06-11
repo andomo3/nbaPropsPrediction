@@ -48,20 +48,26 @@ def run_backtest(
     stat: str,
     date_from: date,
     date_to: date,
+    model: str = "xgb",
 ) -> dict[str, Any]:
     """
-    Run a per-game backtest for one player + stat over a date range.
+    Run a per-game backtest for one player + stat + model over a date range.
+
+    model: 'xgb' | 'rf' | 'lr' | 'naive'
+      - xgb/rf/lr use ModelPredictor with the corresponding saved model file
+      - naive uses the player's season average as the projection (no ML model)
 
     Returns a dict with:
-        run_id, player_name, stat, date_from, date_to,
+        run_id, player_name, stat, model, date_from, date_to,
         aggregate: {total_bets, wins, accuracy, total_pnl, roi},
-        per_game: [{date, opponent, actual, line, prob_over,
+        per_game: [{date, opponent, actual, line, projection, error,
                     predicted_over, correct, pnl, cumulative_pnl}, ...]
     """
     # ── Cache check ───────────────────────────────────────────────────────────
     cached = BacktestRun.objects.filter(
         player_name=player_name,
         stat=stat,
+        model=model,
         date_from=date_from,
         date_to=date_to,
         total_bets__gt=0,
@@ -161,7 +167,13 @@ def run_backtest(
         # Select only the stat-specific features
         feature_row = pd.DataFrame([{k: feature_pool[k] for k in feats}])
 
-        projection = _get_predictor().predict_projection(feature_row, stat, "xgb")
+        if model == "naive":
+            # Naive baseline: predict the player's season average (no ML)
+            season_avg_col = f"season_avg_{stat}"
+            naive_val = row.get(season_avg_col)
+            projection = float(naive_val) if naive_val is not None and not pd.isna(naive_val) else line
+        else:
+            projection = _get_predictor().predict_projection(feature_row, stat, model)
         if projection is None:
             continue
 
@@ -203,6 +215,7 @@ def run_backtest(
     run = BacktestRun.objects.create(
         player_name=player_name,
         stat=stat,
+        model=model,
         date_from=date_from,
         date_to=date_to,
         total_bets=total_bets,
@@ -232,6 +245,7 @@ def run_backtest(
         "run_id":      run.pk,
         "player_name": player_name,
         "stat":        stat,
+        "model":       model,
         "date_from":   str(date_from),
         "date_to":     str(date_to),
         "aggregate": {
@@ -383,6 +397,7 @@ def _serialize_run(run: BacktestRun) -> dict[str, Any]:
         "run_id":      run.pk,
         "player_name": run.player_name,
         "stat":        run.stat,
+        "model":       run.model,
         "date_from":   str(run.date_from),
         "date_to":     str(run.date_to),
         "aggregate": {

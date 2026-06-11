@@ -22,9 +22,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import joblib
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
 
 try:
     from catboost import CatBoostRegressor
@@ -400,6 +403,38 @@ def train_xgboost_regression(
     return model, {"train": train_metrics, "test": test_metrics}
 
 
+def train_rf_regression(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+) -> Tuple[RandomForestRegressor, Dict]:
+    model = RandomForestRegressor(
+        n_estimators=200,
+        max_depth=8,
+        min_samples_leaf=5,
+        random_state=42,
+        n_jobs=-1,
+    )
+    model.fit(X_train, y_train)
+    train_metrics = _eval_regression(model.predict(X_train), y_train)
+    test_metrics  = _eval_regression(model.predict(X_test),  y_test)
+    return model, {"train": train_metrics, "test": test_metrics}
+
+
+def train_lr_regression(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+) -> Tuple[LinearRegression, Dict]:
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    train_metrics = _eval_regression(model.predict(X_train), y_train)
+    test_metrics  = _eval_regression(model.predict(X_test),  y_test)
+    return model, {"train": train_metrics, "test": test_metrics}
+
+
 def train_catboost_regression(
     X_train: np.ndarray,
     y_train: np.ndarray,
@@ -509,7 +544,26 @@ def train_all_regression_models(
             f"Test MAE={xgb_metrics['test']['mae']:.3f}  "
             f"Test RMSE={xgb_metrics['test']['rmse']:.3f}"
         )
-        logger.info(f"  Saved → {xgb_path}")
+
+        # Random Forest
+        rf_model, rf_metrics = train_rf_regression(X_train, y_train, X_test, y_test)
+        rf_path = model_dir / f"{stat}_rf.pkl"
+        joblib.dump(rf_model, str(rf_path))
+        logger.info(
+            f"  [RF]  Train MAE={rf_metrics['train']['mae']:.3f}  "
+            f"Test MAE={rf_metrics['test']['mae']:.3f}  "
+            f"Test RMSE={rf_metrics['test']['rmse']:.3f}"
+        )
+
+        # Linear Regression
+        lr_model, lr_metrics = train_lr_regression(X_train, y_train, X_test, y_test)
+        lr_path = model_dir / f"{stat}_lr.pkl"
+        joblib.dump(lr_model, str(lr_path))
+        logger.info(
+            f"  [LR]  Train MAE={lr_metrics['train']['mae']:.3f}  "
+            f"Test MAE={lr_metrics['test']['mae']:.3f}  "
+            f"Test RMSE={lr_metrics['test']['rmse']:.3f}"
+        )
 
         # CatBoost (optional)
         cb_metrics: Dict = {}
@@ -525,7 +579,6 @@ def train_all_regression_models(
                     f"Test MAE={cb_metrics['test']['mae']:.3f}  "
                     f"Test RMSE={cb_metrics['test']['rmse']:.3f}"
                 )
-                logger.info(f"  Saved → {cb_path}")
 
         metadata["stats"][stat] = {
             "features":      feats,
@@ -533,6 +586,8 @@ def train_all_regression_models(
             "train_samples": int(len(X_train)),
             "test_samples":  int(len(X_test)),
             "xgb":           xgb_metrics,
+            "rf":            rf_metrics,
+            "lr":            lr_metrics,
             "catboost":      cb_metrics,
         }
 

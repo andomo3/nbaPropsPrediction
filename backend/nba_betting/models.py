@@ -102,8 +102,16 @@ class DailyPick(models.Model):
 class BacktestRun(models.Model):
     """Header + aggregate results for a single backtest request. Acts as a cache key."""
 
+    MODEL_CHOICES = [
+        ("xgb",   "XGBoost"),
+        ("rf",    "Random Forest"),
+        ("lr",    "Linear Regression"),
+        ("naive", "Naive (Season Avg)"),
+    ]
+
     player_name = models.CharField(max_length=100)
     stat = models.CharField(max_length=10)
+    model = models.CharField(max_length=20, default="xgb", choices=MODEL_CHOICES)
     date_from = models.DateField()
     date_to = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -115,7 +123,7 @@ class BacktestRun(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["player_name", "stat", "date_from", "date_to"]),
+            models.Index(fields=["player_name", "stat", "model", "date_from", "date_to"]),
         ]
 
 

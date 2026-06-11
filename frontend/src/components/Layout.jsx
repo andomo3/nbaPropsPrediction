@@ -12,6 +12,8 @@ const Layout = () => {
                         label: 'Analytics',
                         links: [
                             { label: 'Season Report', href: '/season-report' },
+                            { label: 'Leaderboard', href: '/leaderboard' },
+                            { label: 'Season Simulator', href: '/simulator' },
                             { label: 'Model Overview', href: '/overview' },
                         ],
                     },
