@@ -32,3 +32,14 @@ SEASON_DATES: dict[int, tuple[date, date]] = {
 }
 
 DEFAULT_SEASON = 2026
+
+# ── Backtest model comparison set ─────────────────────────────────────────────
+
+BACKTEST_MODELS = ["xgb", "rf", "lr", "naive"]
+
+MODEL_LABELS = {
+    "xgb":   "XGBoost",
+    "rf":    "Random Forest",
+    "lr":    "Linear Reg.",
+    "naive": "Naive (Season Avg)",
+}

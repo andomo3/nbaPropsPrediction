@@ -27,6 +27,7 @@ from __future__ import annotations
 from django.core.management.base import BaseCommand
 
 from nba_betting.constants import (
+    BACKTEST_MODELS,
     DEFAULT_SEASON,
     SEASON_DATES,
     SEASON_REPORT_PLAYERS,
@@ -85,10 +86,12 @@ class Command(BaseCommand):
             + (" [DRY RUN]" if dry_run else "")
             + (" [FORCE]" if force else "")
         )
+        total_jobs = len(SEASON_REPORT_PLAYERS) * len(STATS) * len(BACKTEST_MODELS)
         self.stdout.write(
-            f"  Players : {len(SEASON_REPORT_PLAYERS)}  "
+            f"  Players: {len(SEASON_REPORT_PLAYERS)}  "
             f"Stats: {STATS}  "
-            f"Total jobs: {len(SEASON_REPORT_PLAYERS) * len(STATS)}"
+            f"Models: {BACKTEST_MODELS}  "
+            f"Total jobs: {total_jobs}"
         )
 
         done = 0
@@ -97,59 +100,62 @@ class Command(BaseCommand):
 
         for player_name in SEASON_REPORT_PLAYERS:
             for stat in STATS:
-                label = f"{player_name} / {stat.upper()}"
+                for model in BACKTEST_MODELS:
+                    label = f"{player_name} / {stat.upper()} / {model}"
 
-                # ── Force: delete any cached run for this combo ───────────────
-                if force and not dry_run:
-                    deleted, _ = BacktestRun.objects.filter(
-                        player_name=player_name,
-                        stat=stat,
-                        date_from=date_from,
-                        date_to=date_to,
-                    ).delete()
-                    if deleted:
-                        self.stdout.write(f"  [CLEAR] {label} — removed {deleted} cached run(s)")
+                    # ── Force: delete cached run for this combo ───────────────
+                    if force and not dry_run:
+                        deleted, _ = BacktestRun.objects.filter(
+                            player_name=player_name,
+                            stat=stat,
+                            model=model,
+                            date_from=date_from,
+                            date_to=date_to,
+                        ).delete()
+                        if deleted:
+                            self.stdout.write(f"  [CLEAR] {label} — removed {deleted} cached run(s)")
 
-                # ── Skip if already cached (and not forcing) ──────────────────
-                if not force:
-                    exists = BacktestRun.objects.filter(
-                        player_name=player_name,
-                        stat=stat,
-                        date_from=date_from,
-                        date_to=date_to,
-                        total_bets__gt=0,
-                    ).exists()
-                    if exists:
-                        self.stdout.write(f"  [SKIP]  {label} — already cached")
-                        skipped += 1
+                    # ── Skip if already cached ────────────────────────────────
+                    if not force:
+                        exists = BacktestRun.objects.filter(
+                            player_name=player_name,
+                            stat=stat,
+                            model=model,
+                            date_from=date_from,
+                            date_to=date_to,
+                            total_bets__gt=0,
+                        ).exists()
+                        if exists:
+                            self.stdout.write(f"  [SKIP]  {label} — already cached")
+                            skipped += 1
+                            continue
+
+                    if dry_run:
+                        self.stdout.write(f"  [DRY]   {label} — would run backtest")
+                        done += 1
                         continue
 
-                if dry_run:
-                    self.stdout.write(f"  [DRY]   {label} — would run backtest")
-                    done += 1
-                    continue
-
-                # ── Run backtest ──────────────────────────────────────────────
-                try:
-                    result = run_backtest(player_name, stat, date_from, date_to)
-                    agg = result["aggregate"]
-                    self.stdout.write(
-                        f"  [OK]    {label} — "
-                        f"{agg['total_bets']} games, "
-                        f"acc={agg['accuracy']:.1%}, "
-                        f"roi={agg['roi']:+.1f}%"
-                    )
-                    done += 1
-                except ValueError as exc:
-                    self.stdout.write(
-                        self.style.WARNING(f"  [WARN]  {label} — {exc}")
-                    )
-                    failed += 1
-                except Exception as exc:
-                    self.stderr.write(
-                        f"  [ERROR] {label} — {exc}"
-                    )
-                    failed += 1
+                    # ── Run backtest ──────────────────────────────────────────
+                    try:
+                        result = run_backtest(player_name, stat, date_from, date_to, model=model)
+                        agg = result["aggregate"]
+                        self.stdout.write(
+                            f"  [OK]    {label} — "
+                            f"{agg['total_bets']} games, "
+                            f"acc={agg['accuracy']:.1%}, "
+                            f"roi={agg['roi']:+.1f}%"
+                        )
+                        done += 1
+                    except ValueError as exc:
+                        self.stdout.write(
+                            self.style.WARNING(f"  [WARN]  {label} — {exc}")
+                        )
+                        failed += 1
+                    except Exception as exc:
+                        self.stderr.write(
+                            f"  [ERROR] {label} — {exc}"
+                        )
+                        failed += 1
 
         # ── Summary ───────────────────────────────────────────────────────────
         self.stdout.write(

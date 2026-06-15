@@ -7,11 +7,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from scipy.stats import norm
 
-from .constants import DEFAULT_SEASON, SEASON_DATES, SEASON_REPORT_PLAYERS
+from .constants import BACKTEST_MODELS, DEFAULT_SEASON, MODEL_LABELS, SEASON_DATES, SEASON_REPORT_PLAYERS
 from .ml.predictor import get_predictor
 from .models import BacktestRun, DailyPick, Player
 from .services.backtest import run_backtest
 from .services.features import get_model_inputs
+from .services.simulator import run_simulation
 from .utils.dates import et_today
 
 
@@ -449,3 +450,321 @@ class SeasonSummaryView(APIView):
         })
 
 
+class ModelComparisonView(APIView):
+    """
+    GET /api/backtest/model-comparison/?player_name=...&stat=pts&season=2026
+
+    Returns aggregate stats + per-game projections for all 4 models in one
+    request, so the frontend can render the comparison table and overlay chart
+    without multiple round trips.
+
+    Response shape:
+        {
+            "player_name": "...",
+            "stat": "pts",
+            "season": "2025-26",
+            "dates":   ["2026-02-06", ...],   // game dates (shared across models)
+            "actuals": [34.0, 28.0, ...],     // actual values (shared)
+            "models": [
+                {
+                    "model":    "xgb",
+                    "label":    "XGBoost",
+                    "available": true,
+                    "summary":  {total_games, mae, bias, hit_rate, total_pnl, roi},
+                    "projections": [29.1, 27.4, ...]   // parallel to dates/actuals
+                },
+                ...
+            ]
+        }
+    """
+
+    def get(self, request):
+        player_name = request.query_params.get("player_name", "").strip()
+        stat = request.query_params.get("stat", "").lower().strip()
+        season_str = request.query_params.get("season", str(DEFAULT_SEASON))
+
+        if not player_name:
+            return Response({"detail": "player_name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if stat not in ("pts", "reb", "ast"):
+            return Response({"detail": "stat must be one of: pts, reb, ast"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            season_year = int(season_str)
+        except ValueError:
+            return Response({"detail": "season must be an integer year."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if season_year not in SEASON_DATES:
+            return Response(
+                {"detail": f"Season {season_year} not supported. Available: {sorted(SEASON_DATES.keys())}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        matched_name = next(
+            (p for p in SEASON_REPORT_PLAYERS if p.lower() == player_name.lower()), None
+        )
+        if not matched_name:
+            return Response(
+                {"detail": f"{player_name!r} is not in the Season Report Card roster."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        date_from, date_to = SEASON_DATES[season_year]
+        season_label = f"{season_year - 1}-{season_year % 100:02d}"
+
+        # ── Fetch all 4 model runs in one query ───────────────────────────────
+        runs = {
+            run.model: run
+            for run in BacktestRun.objects.filter(
+                player_name=matched_name,
+                stat=stat,
+                date_from=date_from,
+                date_to=date_to,
+                total_bets__gt=0,
+            ).prefetch_related("results")
+        }
+
+        # Use the xgb run to establish the canonical date/actual sequence
+        anchor = runs.get("xgb") or next(iter(runs.values()), None)
+        if anchor is None:
+            return Response(
+                {"detail": f"No seeded data found for {matched_name} / {stat} / {season_label}."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        anchor_results = list(anchor.results.all())
+        dates   = [str(r.game_date) for r in anchor_results]
+        actuals = [r.actual for r in anchor_results]
+
+        # ── Build per-model payload ───────────────────────────────────────────
+        model_rows = []
+        for model_key in BACKTEST_MODELS:
+            run = runs.get(model_key)
+            if run is None:
+                model_rows.append({
+                    "model":       model_key,
+                    "label":       MODEL_LABELS.get(model_key, model_key),
+                    "available":   False,
+                    "summary":     None,
+                    "projections": [],
+                })
+                continue
+
+            results = list(run.results.all())
+            abs_err = sum(abs(r.error) for r in results)
+            err_sum = sum(r.error for r in results)
+            n = len(results)
+
+            model_rows.append({
+                "model":       model_key,
+                "label":       MODEL_LABELS.get(model_key, model_key),
+                "available":   True,
+                "summary": {
+                    "total_games": run.total_bets,
+                    "mae":         round(abs_err / n, 3) if n else 0.0,
+                    "bias":        round(err_sum / n, 3) if n else 0.0,
+                    "hit_rate":    round(run.accuracy, 4),
+                    "total_pnl":   round(run.total_pnl, 2),
+                    "roi":         round(run.roi, 2),
+                },
+                "projections": [round(r.prob_over, 1) for r in results],
+            })
+
+        return Response({
+            "player_name": matched_name,
+            "stat":        stat,
+            "season":      season_label,
+            "dates":       dates,
+            "actuals":     actuals,
+            "models":      model_rows,
+        })
+
+
+class LeaderboardView(APIView):
+    """
+    GET /api/backtest/leaderboard/?stat=pts&model=xgb&season=2026
+
+    Returns all 10 seed players ranked by MAE ascending (most predictable first).
+    Reads from already-seeded BacktestRun rows — no computation on request.
+
+    Query params:
+        stat    (required) — pts | reb | ast
+        model   (optional) — xgb | rf | lr | naive  (default: xgb)
+        season  (optional) — NBA season end-year     (default: 2026)
+
+    Response:
+        {
+            "stat": "pts",
+            "model": "xgb",
+            "model_label": "XGBoost",
+            "season": "2025-26",
+            "rankings": [
+                {
+                    "rank": 1,
+                    "player_name": "Nikola Jokic",
+                    "total_games": 45,
+                    "mae":      3.21,
+                    "bias":    -0.14,
+                    "hit_rate": 0.601,
+                    "total_pnl": 4.20,
+                    "roi":      5.1
+                },
+                ...
+            ]
+        }
+    """
+
+    def get(self, request):
+        stat       = request.query_params.get("stat",   "pts").lower().strip()
+        model      = request.query_params.get("model",  "xgb").lower().strip()
+        season_str = request.query_params.get("season", str(DEFAULT_SEASON))
+
+        if stat not in ("pts", "reb", "ast"):
+            return Response(
+                {"detail": "stat must be one of: pts, reb, ast"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if model not in BACKTEST_MODELS:
+            return Response(
+                {"detail": f"model must be one of: {BACKTEST_MODELS}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            season_year = int(season_str)
+        except ValueError:
+            return Response(
+                {"detail": "season must be an integer year."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if season_year not in SEASON_DATES:
+            return Response(
+                {"detail": f"Season {season_year} not supported. Available: {sorted(SEASON_DATES.keys())}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        date_from, date_to = SEASON_DATES[season_year]
+        season_label = f"{season_year - 1}-{season_year % 100:02d}"
+
+        # ── Fetch all seeded runs for this stat/model/season in one query ─────
+        runs = {
+            run.player_name: run
+            for run in BacktestRun.objects.filter(
+                stat=stat,
+                model=model,
+                date_from=date_from,
+                date_to=date_to,
+                total_bets__gt=0,
+                player_name__in=SEASON_REPORT_PLAYERS,
+            ).prefetch_related("results")
+        }
+
+        rankings = []
+        for player_name in SEASON_REPORT_PLAYERS:
+            run = runs.get(player_name)
+            if run is None:
+                continue
+
+            results  = list(run.results.all())
+            n        = len(results)
+            abs_err  = sum(abs(r.error) for r in results)
+            err_sum  = sum(r.error for r in results)
+
+            rankings.append({
+                "player_name": player_name,
+                "total_games": run.total_bets,
+                "mae":         round(abs_err / n, 3) if n else 0.0,
+                "bias":        round(err_sum / n, 3) if n else 0.0,
+                "hit_rate":    round(run.accuracy, 4),
+                "total_pnl":   round(run.total_pnl, 2),
+                "roi":         round(run.roi, 2),
+            })
+
+        # Sort by MAE ascending — lowest error = most predictable = rank 1
+        rankings.sort(key=lambda r: r["mae"])
+        for i, row in enumerate(rankings):
+            row["rank"] = i + 1
+
+        return Response({
+            "stat":        stat,
+            "model":       model,
+            "model_label": MODEL_LABELS.get(model, model),
+            "season":      season_label,
+            "rankings":    rankings,
+        })
+
+
+class SimulatorView(APIView):
+    """
+    GET /api/simulator/?player_name=Luka+Doncic&stat=pts&n_future=20
+
+    Fits AR(1) to the player's 2025-26 game log and runs Monte Carlo
+    simulation to project the next n_future games.
+
+    Response:
+        {
+            "player_name": "Luka Doncic",
+            "stat": "pts",
+            "season": "2025-26",
+            "season_avg": 28.4,
+            "games_played": 47,
+            "n_future": 20,
+            "ar1_phi": 0.23,
+            "ar1_sigma": 6.1,
+            "actual": [
+                {"game_num": 1, "date": "2025-10-22", "value": 31, "opponent": "OKC"},
+                ...
+            ],
+            "projections": [
+                {"game_num": 48, "p10": 16, "p25": 22, "p50": 28, "p75": 34, "p90": 40},
+                ...
+            ],
+            "prop_table": [
+                {"line": 20.5, "prob_over": 0.82},
+                ...
+            ]
+        }
+    """
+
+    def get(self, request):
+        player_name = request.query_params.get("player_name", "").strip()
+        stat        = request.query_params.get("stat", "pts").lower().strip()
+        n_future_str = request.query_params.get("n_future", "20")
+
+        if not player_name:
+            return Response(
+                {"detail": "player_name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if stat not in ("pts", "reb", "ast"):
+            return Response(
+                {"detail": "stat must be one of: pts, reb, ast"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            n_future = max(1, min(int(n_future_str), 82))
+        except ValueError:
+            n_future = 20
+
+        matched_name = next(
+            (p for p in SEASON_REPORT_PLAYERS if p.lower() == player_name.lower()),
+            None,
+        )
+        if not matched_name:
+            return Response(
+                {"detail": (
+                    f"{player_name!r} is not in the Season Report roster. "
+                    f"Available: {SEASON_REPORT_PLAYERS}"
+                )},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            result = run_simulation(matched_name, stat, n_future=n_future)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            return Response(
+                {"detail": f"Simulation failed: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(result)

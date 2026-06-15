@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from typing import Dict, Optional, Union
 
+import joblib
 import pandas as pd
 import xgboost as xgb
 
@@ -50,6 +51,8 @@ class ModelPredictor:
             model = self._load_xgboost(stat_key)
         elif model_type == "catboost":
             model = self._load_catboost(stat_key)
+        elif model_type in ("rf", "lr"):
+            model = self._load_sklearn(stat_key, model_type)
         else:
             return None
 
@@ -68,6 +71,12 @@ class ModelPredictor:
         model = xgb.Booster()
         model.load_model(str(model_path))
         return model
+
+    def _load_sklearn(self, stat: str, model_type: str):
+        model_path = self.model_dir / f"{stat}_{model_type}.pkl"
+        if not model_path.exists():
+            return None
+        return joblib.load(str(model_path))
 
     def _load_catboost(self, stat: str) -> Optional["CatBoostRegressor"]:
         if not CATBOOST_AVAILABLE:
@@ -108,10 +117,9 @@ class ModelPredictor:
         if model_type == "xgb":
             dmatrix = xgb.DMatrix(X, feature_names=feats)
             result = model.predict(dmatrix)
-            return float(result[0])
         else:
             result = model.predict(X.values)
-            return float(result[0])
+        return float(result[0])
 
     def predict_with_both_models(
         self, feature_row: pd.DataFrame, stat: str
