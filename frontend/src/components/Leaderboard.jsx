@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Select,
     SelectContent,
@@ -28,6 +29,28 @@ const MODEL_COLORS = {
     lr:    'bg-green-500/20 text-green-400 border-green-500/30',
     naive: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
 };
+
+const TIER_FILTERS = [
+    { key: 'all',      label: 'All Players' },
+    { key: 'High',     label: 'High' },
+    { key: 'Moderate', label: 'Moderate' },
+    { key: 'Low',      label: 'Low' },
+];
+
+const TIER_STYLES = {
+    High:     'bg-green-500/15 text-green-400 border-green-500/30',
+    Moderate: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    Low:      'bg-red-500/15   text-red-400   border-red-500/30',
+};
+
+function TierBadge({ tier, score }) {
+    return (
+        <div className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${TIER_STYLES[tier] ?? 'bg-border text-muted-foreground border-border'}`}>
+            <span>{tier}</span>
+            <span className="text-[10px] font-normal opacity-75">{score}</span>
+        </div>
+    );
+}
 
 const RANK_STYLES = [
     { bg: 'bg-amber-500/10 border-amber-500/30',  text: 'text-amber-400',  num: 'text-amber-400'  },  // 1st
@@ -59,7 +82,8 @@ function MaeBar({ mae, maxMae }) {
     );
 }
 
-function PlayerRow({ row, maxMae }) {
+function PlayerRow({ row, maxMae, stat }) {
+    const navigate = useNavigate();
     const rankStyle = RANK_STYLES[row.rank - 1];
     const isTopThree = row.rank <= 3;
 
@@ -75,12 +99,17 @@ function PlayerRow({ row, maxMae }) {
                 <RankBadge rank={row.rank} />
             </div>
 
-            {/* Player name */}
-            <div className="flex-1 min-w-0">
-                <p className={`font-semibold truncate ${isTopThree ? rankStyle.text : 'text-foreground'}`}>
-                    {row.player_name}
-                </p>
-                <p className="text-xs text-muted-foreground">{row.total_games} games</p>
+            {/* Player name + tier badge */}
+            <div className="flex-1 min-w-0 flex items-center gap-3">
+                <div className="min-w-0">
+                    <p className={`font-semibold truncate ${isTopThree ? rankStyle.text : 'text-foreground'}`}>
+                        {row.player_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{row.total_games} games</p>
+                </div>
+                {row.predictability_tier && (
+                    <TierBadge tier={row.predictability_tier} score={row.predictability_score} />
+                )}
             </div>
 
             {/* MAE bar */}
@@ -112,17 +141,27 @@ function PlayerRow({ row, maxMae }) {
                     {row.bias >= 0 ? '+' : ''}{row.bias.toFixed(2)}
                 </p>
             </div>
+
+            {/* Profile link */}
+            <button
+                type="button"
+                onClick={() => navigate(`/profile?player_name=${encodeURIComponent(row.player_name)}&stat=${stat}`)}
+                className="flex-shrink-0 text-xs text-primary hover:text-primary/80 font-medium hidden sm:block transition-colors"
+            >
+                Profile →
+            </button>
         </div>
     );
 }
 
 const Leaderboard = () => {
-    const [stat, setStat]   = useState('pts');
-    const [model, setModel] = useState('xgb');
+    const [stat, setStat]         = useState('pts');
+    const [model, setModel]       = useState('xgb');
+    const [tierFilter, setTierFilter] = useState('all');
 
-    const [data, setData]     = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError]   = useState(null);
+    const [data, setData]         = useState(null);
+    const [loading, setLoading]   = useState(true);
+    const [error, setError]       = useState(null);
 
     useEffect(() => {
         setLoading(true);
@@ -144,10 +183,19 @@ const Leaderboard = () => {
             .finally(() => setLoading(false));
     }, [stat, model]);
 
-    const rankings = data?.rankings ?? [];
-    const maxMae   = rankings.length ? Math.max(...rankings.map((r) => r.mae)) : 1;
-    const statLabel  = STATS.find((s) => s.key === stat)?.label ?? stat;
-    const modelLabel = MODELS.find((m) => m.value === model)?.label ?? model;
+    const allRankings = data?.rankings ?? [];
+    const rankings    = tierFilter === 'all'
+        ? allRankings
+        : allRankings.filter((r) => r.predictability_tier === tierFilter);
+    const maxMae      = allRankings.length ? Math.max(...allRankings.map((r) => r.mae)) : 1;
+    const statLabel   = STATS.find((s) => s.key === stat)?.label ?? stat;
+    const modelLabel  = MODELS.find((m) => m.value === model)?.label ?? model;
+
+    // tier counts for filter chip labels
+    const tierCounts = allRankings.reduce((acc, r) => {
+        acc[r.predictability_tier] = (acc[r.predictability_tier] ?? 0) + 1;
+        return acc;
+    }, {});
 
     return (
         <div className="w-full max-w-4xl mx-auto text-left">
@@ -202,6 +250,35 @@ const Leaderboard = () => {
                     </Select>
                 </div>
 
+                {/* Predictability filter */}
+                {data && (
+                    <div className="space-y-1.5">
+                        <span className="text-xs uppercase tracking-wider font-semibold text-primary block">predictability</span>
+                        <div className="flex gap-1 bg-input rounded-xl p-1">
+                            {TIER_FILTERS.map(({ key, label }) => {
+                                const count = key === 'all' ? allRankings.length : (tierCounts[key] ?? 0);
+                                return (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        onClick={() => setTierFilter(key)}
+                                        className={`px-3 py-2 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                                            tierFilter === key
+                                                ? 'bg-primary text-primary-foreground'
+                                                : 'text-muted-foreground hover:text-foreground'
+                                        }`}
+                                    >
+                                        {label}
+                                        <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${
+                                            tierFilter === key ? 'bg-white/20' : 'bg-border'
+                                        }`}>{count}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 {/* Active filter pill */}
                 {data && (
                     <div className={`mb-0.5 px-3 py-1.5 rounded-full border text-xs font-medium ${MODEL_COLORS[model]}`}>
@@ -225,8 +302,8 @@ const Leaderboard = () => {
                 </div>
             )}
 
-            {/* ── Empty ────────────────────────────────────────────────────── */}
-            {!loading && !error && rankings.length === 0 && (
+            {/* ── Empty (no seeded data) ───────────────────────────────────── */}
+            {!loading && !error && allRankings.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
                     <span className="text-3xl">—</span>
                     <p className="text-muted-foreground text-sm">
@@ -238,11 +315,28 @@ const Leaderboard = () => {
                 </div>
             )}
 
+            {/* ── Empty (tier filter excluded everyone) ────────────────────── */}
+            {!loading && !error && allRankings.length > 0 && rankings.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+                    <span className="text-3xl">—</span>
+                    <p className="text-muted-foreground text-sm">
+                        No <strong>{tierFilter}</strong> predictability players in this dataset.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => setTierFilter('all')}
+                        className="text-xs text-primary underline"
+                    >
+                        Show all players
+                    </button>
+                </div>
+            )}
+
             {/* ── Rankings list ─────────────────────────────────────────────── */}
             {!loading && !error && rankings.length > 0 && (
                 <div className="space-y-2">
                     {rankings.map((row) => (
-                        <PlayerRow key={row.player_name} row={row} maxMae={maxMae} />
+                        <PlayerRow key={row.player_name} row={row} maxMae={maxMae} stat={stat} />
                     ))}
                 </div>
             )}
@@ -250,9 +344,10 @@ const Leaderboard = () => {
             {/* ── Legend ───────────────────────────────────────────────────── */}
             {!loading && !error && rankings.length > 0 && (
                 <div className="mt-6 pt-4 border-t border-border flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                    <span><strong className="text-foreground">MAE</strong> — mean absolute error (lower = more predictable)</span>
+                    <span><strong className="text-foreground">MAE</strong> — mean absolute error (lower = more accurate)</span>
                     <span><strong className="text-foreground">Hit Rate</strong> — % of over/under calls correct (break-even: 52.4%)</span>
                     <span><strong className="text-foreground">Bias</strong> — average signed error (+ = model under-projects)</span>
+                    <span><strong className="text-green-400">High</strong> / <strong className="text-amber-400">Moderate</strong> / <strong className="text-red-400">Low</strong> — composite predictability score (R² + CV + hit rate)</span>
                 </div>
             )}
         </div>

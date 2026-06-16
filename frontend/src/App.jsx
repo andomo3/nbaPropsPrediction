@@ -9,6 +9,7 @@ import Backtest from './components/Backtest';
 import SeasonReport from './components/SeasonReport';
 import Leaderboard from './components/Leaderboard';
 import Simulator from './components/Simulator';
+import PlayerProfile from './components/PlayerProfile';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
           <Route path="season-report" element={<SeasonReport />} />
           <Route path="leaderboard" element={<Leaderboard />} />
           <Route path="simulator" element={<Simulator />} />
+          <Route path="profile" element={<PlayerProfile />} />
         </Route>
       </Routes>
     </BrowserRouter>
