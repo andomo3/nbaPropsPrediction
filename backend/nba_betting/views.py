@@ -13,6 +13,8 @@ from .models import BacktestRun, DailyPick, Player
 from .services.backtest import run_backtest
 from .services.features import get_model_inputs
 from .services.simulator import run_simulation
+from .services.shap_analysis import compute_shap_analysis
+from .services.variance_decomp import compute_variance_decomposition
 from .utils.dates import et_today
 
 
@@ -668,14 +670,33 @@ class LeaderboardView(APIView):
             abs_err  = sum(abs(r.error) for r in results)
             err_sum  = sum(r.error for r in results)
 
+            # ── Predictability score ──────────────────────────────────────────
+            actuals = [r.actual for r in results]
+            errors  = [r.error  for r in results]
+            mean_a  = sum(actuals) / n if n else 0.0
+            var_a   = sum((a - mean_a) ** 2 for a in actuals) / n if n > 1 else 1.0
+            mean_e  = sum(errors) / n if n else 0.0
+            var_e   = sum((e - mean_e) ** 2 for e in errors) / n if n > 1 else 0.0
+            r2      = max(0.0, 1.0 - var_e / var_a) if var_a > 0 else 0.0
+            cv      = (var_a ** 0.5) / mean_a if mean_a > 0 else 1.0
+
+            hit_rate   = run.accuracy
+            r2_s       = max(0.0, min(1.0, r2))
+            cv_s       = max(0.0, min(1.0, 1.0 - cv))
+            hr_s       = min(max(0.0, hit_rate - 0.524) / 0.476, 1.0)
+            pred_score = round(r2_s * 50 + cv_s * 30 + hr_s * 20, 1)
+            pred_tier  = "High" if pred_score >= 65 else ("Moderate" if pred_score >= 40 else "Low")
+
             rankings.append({
-                "player_name": player_name,
-                "total_games": run.total_bets,
-                "mae":         round(abs_err / n, 3) if n else 0.0,
-                "bias":        round(err_sum / n, 3) if n else 0.0,
-                "hit_rate":    round(run.accuracy, 4),
-                "total_pnl":   round(run.total_pnl, 2),
-                "roi":         round(run.roi, 2),
+                "player_name":        player_name,
+                "total_games":        run.total_bets,
+                "mae":                round(abs_err / n, 3) if n else 0.0,
+                "bias":               round(err_sum / n, 3) if n else 0.0,
+                "hit_rate":           round(hit_rate, 4),
+                "total_pnl":          round(run.total_pnl, 2),
+                "roi":                round(run.roi, 2),
+                "predictability_score": pred_score,
+                "predictability_tier":  pred_tier,
             })
 
         # Sort by MAE ascending — lowest error = most predictable = rank 1
@@ -764,6 +785,169 @@ class SimulatorView(APIView):
         except Exception as exc:
             return Response(
                 {"detail": f"Simulation failed: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(result)
+
+
+class ShapAnalysisView(APIView):
+    """
+    GET /api/analysis/shap/?player_name=LeBron+James&stat=pts
+
+    Computes SHAP feature attributions for the XGBoost model on the player's
+    2025-26 game log. Expensive on first call (~1-2s); no DB caching.
+
+    Response:
+        {
+            "player_name": "LeBron James",
+            "stat": "pts",
+            "n_games": 68,
+            "expected_value": 24.3,
+            "feature_importance": [
+                {
+                    "feature": "pts_L5",
+                    "label": "Pts avg (L5)",
+                    "mean_abs_shap": 3.21,
+                    "mean_shap": 2.84,
+                    "direction": "positive",
+                    "pct_contribution": 28.4
+                },
+                ...
+            ],
+            "per_game": [
+                {
+                    "game_num": 1,
+                    "date": "2026-02-06",
+                    "opponent": "GSW",
+                    "actual": 31.0,
+                    "projection": 27.4,
+                    "top_driver": {"feature": "pts_L5", "label": "Pts avg (L5)", "shap_value": 4.1},
+                    "shap_values": {"pts_L5": 4.1, "opp_pts_allowed_L10": -1.2, ...}
+                },
+                ...
+            ],
+            "group_importance": {
+                "form": 42.1,
+                "opponent": 12.3,
+                "minutes": 8.4,
+                "shooting": 11.2,
+                "season_avg": 18.6,
+                "context": 7.4
+            },
+            "insight": "LeBron's projected points output is most sensitive to..."
+        }
+    """
+
+    def get(self, request):
+        player_name = request.query_params.get("player_name", "").strip()
+        stat        = request.query_params.get("stat", "pts").lower().strip()
+
+        if not player_name:
+            return Response(
+                {"detail": "player_name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if stat not in ("pts", "reb", "ast"):
+            return Response(
+                {"detail": "stat must be one of: pts, reb, ast"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        matched_name = next(
+            (p for p in SEASON_REPORT_PLAYERS if p.lower() == player_name.lower()),
+            None,
+        )
+        if not matched_name:
+            return Response(
+                {"detail": (
+                    f"{player_name!r} is not in the Season Report roster. "
+                    f"Available: {SEASON_REPORT_PLAYERS}"
+                )},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            result = compute_shap_analysis(matched_name, stat)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            return Response(
+                {"detail": f"SHAP analysis failed: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(result)
+
+
+class VarianceDecompView(APIView):
+    """
+    GET /api/analysis/variance/?player_name=LeBron+James&stat=pts&season=2026
+
+    Research-grade variance decomposition for player stat predictability.
+    Reads from cached BacktestResult rows — no recomputation.
+
+    Response:
+        {
+            "player_name": "LeBron James",
+            "stat": "pts",
+            "season": "2025-26",
+            "n_games": 68,
+            "distributional": {
+                "mean": 24.3, "std": 6.1, "cv": 0.251, "mad": 4.5,
+                "skewness": 0.21, "excess_kurtosis": -0.4,
+                "normality_test": "dagostino-pearson", "normality_p": 0.14,
+                "errors_normal": true
+            },
+            "variance_components": {
+                "model_r2": 0.312,
+                "opponent_eta2": 0.118,
+                "opponent_delta": 0.054,
+                "residual": 0.634
+            },
+            "icc": 0.082,
+            "model_comparison": [
+                {"model": "xgb", "label": "XGBoost", "available": true,
+                 "mae": 4.21, "r2": 0.312, "bias": -0.34, "hit_rate": 0.632, "roi": 21.5},
+                ...
+            ],
+            "predictability_score": 58.4,
+            "predictability_tier": "Moderate",
+            "insight": "LeBron's points output is Moderate predictability..."
+        }
+    """
+
+    def get(self, request):
+        player_name = request.query_params.get("player_name", "").strip()
+        stat        = request.query_params.get("stat", "pts").lower().strip()
+        season_str  = request.query_params.get("season", str(DEFAULT_SEASON))
+
+        if not player_name:
+            return Response({"detail": "player_name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if stat not in ("pts", "reb", "ast"):
+            return Response({"detail": "stat must be one of: pts, reb, ast"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            season = int(season_str)
+        except ValueError:
+            return Response({"detail": "season must be an integer year."}, status=status.HTTP_400_BAD_REQUEST)
+
+        matched_name = next(
+            (p for p in SEASON_REPORT_PLAYERS if p.lower() == player_name.lower()), None
+        )
+        if not matched_name:
+            return Response(
+                {"detail": f"{player_name!r} is not in the Season Report roster."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            result = compute_variance_decomposition(matched_name, stat, season)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            return Response(
+                {"detail": f"Variance decomposition failed: {exc}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

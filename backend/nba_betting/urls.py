@@ -12,4 +12,6 @@ urlpatterns = [
     path("backtest/model-comparison/", views.ModelComparisonView.as_view(), name="model-comparison"),
     path("backtest/leaderboard/", views.LeaderboardView.as_view(), name="leaderboard"),
     path("simulator/", views.SimulatorView.as_view(), name="simulator"),
+    path("analysis/shap/", views.ShapAnalysisView.as_view(), name="shap-analysis"),
+    path("analysis/variance/", views.VarianceDecompView.as_view(), name="variance-decomp"),
 ]
