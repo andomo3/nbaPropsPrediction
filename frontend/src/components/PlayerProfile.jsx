@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import TierHistory from './TierHistory';
 import {
     BarChart, Bar,
     PieChart, Pie, Cell,
@@ -562,6 +563,11 @@ const PlayerProfile = () => {
                     </p>
                 </Card>
             )}
+
+            {/* ── Tier history ─────────────────────────────────────────────── */}
+            <div className="mt-4">
+                <TierHistory playerName={player} stat={stat} season={2026} />
+            </div>
         </div>
     );
 };

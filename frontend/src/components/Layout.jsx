@@ -11,18 +11,9 @@ const Layout = () => {
                     {
                         label: 'Analytics',
                         links: [
-                            { label: 'Season Report', href: '/season-report' },
                             { label: 'Leaderboard', href: '/leaderboard' },
-                            { label: 'Season Simulator', href: '/simulator' },
+                            { label: 'Player Intelligence', href: '/intelligence' },
                             { label: 'Predictability Profile', href: '/profile' },
-                            { label: 'Model Overview', href: '/overview' },
-                        ],
-                    },
-                    {
-                        label: 'Insights',
-                        links: [
-                            { label: 'How It Works', href: '/overview' },
-                            { label: 'Model Notes', href: '/overview' },
                         ],
                     },
                     {
