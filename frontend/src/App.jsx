@@ -8,8 +8,10 @@ import DailyPicks from './components/DailyPicks';
 import Backtest from './components/Backtest';
 import SeasonReport from './components/SeasonReport';
 import Leaderboard from './components/Leaderboard';
+import LeaderboardComparison from './components/LeaderboardComparison';
 import Simulator from './components/Simulator';
 import PlayerProfile from './components/PlayerProfile';
+import PlayerIntelligence from './components/PlayerIntelligence';
 
 function App() {
   return (
@@ -23,8 +25,10 @@ function App() {
           <Route path="backtest" element={<Backtest />} />
           <Route path="season-report" element={<SeasonReport />} />
           <Route path="leaderboard" element={<Leaderboard />} />
+          <Route path="leaderboard-comparison" element={<LeaderboardComparison />} />
           <Route path="simulator" element={<Simulator />} />
           <Route path="profile" element={<PlayerProfile />} />
+          <Route path="intelligence" element={<PlayerIntelligence />} />
         </Route>
       </Routes>
     </BrowserRouter>
