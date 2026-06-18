@@ -45,6 +45,7 @@ from nba_betting.constants import (
     SEASON_DATES,
 )
 from nba_betting.models import BacktestResult, BacktestRun
+from nba_betting.utils.stats import pred_score_tier
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
@@ -124,7 +125,9 @@ def compute_variance_decomposition(
     cv         = distributional["cv"]
     hit_rate   = xgb_run.accuracy
 
-    score, tier = _predictability_score(r2, cv, hit_rate)
+    actuals_list = list(actuals)
+    errors_list  = [a - p for a, p in zip(actuals_list, projections)]
+    score, tier  = pred_score_tier(actuals_list, errors_list, hit_rate)
 
     # ── 6. Auto-insight ───────────────────────────────────────────────────────
     season_label = f"{season - 1}-{season % 100:02d}"
@@ -350,37 +353,6 @@ def _model_comparison(
     return comparison
 
 
-# ── Predictability score ──────────────────────────────────────────────────────
-
-def _predictability_score(r2: float, cv: float, hit_rate: float) -> tuple[float, str]:
-    """
-    Composite score 0–100. Higher = more predictable.
-
-    Components:
-      R²  (50%) — model explains this fraction of variance
-      CV  (30%) — lower spread relative to mean = more predictable
-      HR  (20%) — hit-rate above break-even signals exploitable signal
-    """
-    # R² component: 0 → 0 pts, 0.5 → 50 pts, 1.0 → 100 pts
-    r2_score = np.clip(r2, 0, 1) * 100
-
-    # CV component: CV=0 → 100 pts, CV=0.5 → 50 pts, CV≥1 → 0 pts
-    cv_score = np.clip((1.0 - cv) * 100, 0, 100)
-
-    # Hit rate component: 0.5 → 0 pts, 0.65 → 75 pts, 1.0 → 100 pts
-    hr_excess = max(0.0, hit_rate - 0.5) / 0.5   # 0–1
-    hr_score  = hr_excess * 100
-
-    score = 0.50 * r2_score + 0.30 * cv_score + 0.20 * hr_score
-
-    if score >= 65:
-        tier = "High"
-    elif score >= 40:
-        tier = "Moderate"
-    else:
-        tier = "Low"
-
-    return float(score), tier
 
 
 # ── Auto-insight ──────────────────────────────────────────────────────────────
