@@ -3,8 +3,11 @@ Behavioral fingerprint — synthesises edge calibration, floor/ceiling, opponent
 analysis, and (optionally) SHAP to produce a structured player scouting profile.
 """
 
-from ..models import BacktestRun
-from ..constants import DEFAULT_SEASON, SEASON_DATES
+import logging
+
+from ..constants import DEFAULT_SEASON
+
+logger = logging.getLogger(__name__)
 
 
 def compute_player_fingerprint(player_name, stat, season=DEFAULT_SEASON):
@@ -12,13 +15,14 @@ def compute_player_fingerprint(player_name, stat, season=DEFAULT_SEASON):
     from .floor_ceiling      import compute_floor_ceiling
     from .opponent_analysis  import compute_opponent_analysis
 
-    # Lazy import to avoid crash if shap not installed
     shap_data = None
+    shap_error = None
     try:
         from .shap_analysis import compute_shap_analysis
         shap_data = compute_shap_analysis(player_name, stat)
-    except Exception:
-        pass
+    except Exception as e:
+        shap_error = str(e)
+        logger.warning("SHAP unavailable for %s/%s: %s", player_name, stat, e)
 
     edge  = compute_edge_calibration(player_name, stat, season)
     fc    = compute_floor_ceiling(player_name, stat, season)
@@ -84,22 +88,41 @@ def compute_player_fingerprint(player_name, stat, season=DEFAULT_SEASON):
         player_name, stat, archetype, bt, fc, opp, edge, rested_hr, bb_hr
     )
 
+    dimensions = {
+        "consistency":         consistency,
+        "edge_reliability":    edge_reliability,
+        "matchup_sensitivity": matchup_sensitivity,
+        "form_dependence":     form_dependence,
+        "rest_sensitivity":    rest_sensitivity,
+    }
+
+    radar = [
+        {"dimension": "Consistency",    "value": consistency},
+        {"dimension": "Edge Reliability", "value": edge_reliability},
+        {"dimension": "Matchup Sens.",  "value": matchup_sensitivity},
+        {"dimension": "Form Dep.",      "value": form_dependence},
+        {"dimension": "Rest Sens.",     "value": rest_sensitivity},
+    ]
+
+    insight = _insight(
+        player_name, stat, archetype, dimensions,
+        dominant_group, shap_group_importance, fc, opp, edge
+    )
+
     return {
-        "player_name": player_name,
-        "stat":        stat,
-        "archetype":   archetype,
-        "dimensions": {
-            "consistency":        consistency,
-            "edge_reliability":   edge_reliability,
-            "matchup_sensitivity": matchup_sensitivity,
-            "form_dependence":    form_dependence,
-            "rest_sensitivity":   rest_sensitivity,
-        },
+        "player_name":            player_name,
+        "stat":                   stat,
+        "archetype":              archetype,
+        "dimensions":             dimensions,
+        "radar":                  radar,
         "dominant_shap_group":    dominant_group,
         "shap_group_importance":  shap_group_importance,
+        "shap_available":         shap_data is not None,
+        "shap_error":             shap_error,
         "strengths":              strengths,
         "vulnerabilities":        vulnerabilities,
         "betting_profile":        betting_profile,
+        "insight":                insight,
         "floor":                  fc["floor"],
         "ceiling":                fc["ceiling"],
         "best_edge_threshold":    bt,
@@ -169,6 +192,57 @@ def _swot(player_name, stat, consistency, edge_reliability, matchup_sensitivity,
         )
 
     return strengths[:3], vulnerabilities[:3]
+
+
+def _insight(player_name, stat, archetype, dimensions, dominant_group,
+             shap_group_importance, fc, opp, edge):
+    first = player_name.split()[0]
+    s = {"pts": "points", "reb": "rebounds", "ast": "assists"}.get(stat, stat)
+
+    cons  = dimensions["consistency"]
+    er    = dimensions["edge_reliability"]
+    ms    = dimensions["matchup_sensitivity"]
+    fd    = dimensions["form_dependence"]
+    rs    = dimensions["rest_sensitivity"]
+
+    parts = [f"**{first}** is classified as a **{archetype}**."]
+
+    if cons >= 65:
+        parts.append(f"Output consistency is high ({cons:.0f}/100) — the floor is reliable.")
+    elif cons < 35:
+        parts.append(f"Output is volatile ({cons:.0f}/100) — expect wide swings around the median.")
+
+    if er >= 50:
+        parts.append(f"Model edges convert to profit ({er:.0f}/100 edge reliability).")
+    else:
+        parts.append(f"Model edges are weak predictors ({er:.0f}/100) — bet selectively.")
+
+    if ms >= 25:
+        best = opp["favorable"][0]["opponent"] if opp["favorable"] else None
+        parts.append(
+            f"Matchup is a key lever ({ms:.0f}/100 sensitivity)"
+            + (f" — {best} is a prime target." if best else ".")
+        )
+
+    if fd >= 40:
+        parts.append(f"Recent form strongly influences output ({fd:.0f}/100) — avoid cold streaks.")
+
+    if rs >= 40:
+        parts.append(f"Rest matters significantly ({rs:.0f}/100) — back-to-backs carry risk.")
+
+    if dominant_group and shap_group_importance:
+        pct = shap_group_importance.get(dominant_group, 0)
+        label_map = {
+            "form": "recent form", "opponent": "opponent strength",
+            "minutes": "minutes load", "shooting": "shooting efficiency",
+            "season_avg": "season averages", "context": "game context",
+        }
+        parts.append(
+            f"The XGBoost model is primarily driven by **{label_map.get(dominant_group, dominant_group)}** "
+            f"({pct:.0f}% of prediction variance)."
+        )
+
+    return " ".join(parts)
 
 
 def _betting_profile(player_name, stat, archetype, bt, fc, opp, edge, rested_hr, bb_hr):
