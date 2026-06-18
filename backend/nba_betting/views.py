@@ -19,6 +19,7 @@ from .services.edge_calibration import compute_edge_calibration
 from .services.floor_ceiling import compute_floor_ceiling
 from .services.opponent_analysis import compute_opponent_analysis
 from .services.player_fingerprint import compute_player_fingerprint
+from .utils.stats import pred_score_tier
 from .utils.dates import et_today
 
 
@@ -675,21 +676,9 @@ class LeaderboardView(APIView):
             err_sum  = sum(r.error for r in results)
 
             # ── Predictability score ──────────────────────────────────────────
-            actuals = [r.actual for r in results]
-            errors  = [r.error  for r in results]
-            mean_a  = sum(actuals) / n if n else 0.0
-            var_a   = sum((a - mean_a) ** 2 for a in actuals) / n if n > 1 else 1.0
-            mean_e  = sum(errors) / n if n else 0.0
-            var_e   = sum((e - mean_e) ** 2 for e in errors) / n if n > 1 else 0.0
-            r2      = max(0.0, 1.0 - var_e / var_a) if var_a > 0 else 0.0
-            cv      = (var_a ** 0.5) / mean_a if mean_a > 0 else 1.0
-
-            hit_rate   = run.accuracy
-            r2_s       = max(0.0, min(1.0, r2))
-            cv_s       = max(0.0, min(1.0, 1.0 - cv))
-            hr_s       = min(max(0.0, hit_rate - 0.524) / 0.476, 1.0)
-            pred_score = round(r2_s * 50 + cv_s * 30 + hr_s * 20, 1)
-            pred_tier  = "High" if pred_score >= 65 else ("Moderate" if pred_score >= 40 else "Low")
+            actuals    = [r.actual for r in results]
+            errors     = [r.error  for r in results]
+            pred_score, pred_tier = pred_score_tier(actuals, errors, run.accuracy)
 
             rankings.append({
                 "player_name":        player_name,
@@ -958,27 +947,6 @@ class VarianceDecompView(APIView):
         return Response(result)
 
 
-# ── Shared helper ─────────────────────────────────────────────────────────────
-
-def _pred_score_tier(actuals, errors, hit_rate):
-    """Return (score, tier) composite predictability for a set of game rows."""
-    n = len(actuals)
-    if n < 5:
-        return None, None
-    mean_a = sum(actuals) / n
-    var_a  = sum((a - mean_a) ** 2 for a in actuals) / n
-    mean_e = sum(errors)  / n
-    var_e  = sum((e - mean_e) ** 2 for e in errors)  / n
-    r2     = max(0.0, 1.0 - var_e / var_a) if var_a > 0 else 0.0
-    cv     = (var_a ** 0.5) / mean_a if mean_a > 0 else 1.0
-    r2_s   = max(0.0, min(1.0, r2))
-    cv_s   = max(0.0, min(1.0, 1.0 - cv))
-    hr_s   = min(max(0.0, hit_rate - 0.524) / 0.476, 1.0)
-    score  = round(r2_s * 50 + cv_s * 30 + hr_s * 20, 1)
-    tier   = "High" if score >= 65 else ("Moderate" if score >= 40 else "Low")
-    return score, tier
-
-
 class LeaderboardComparisonView(APIView):
     """
     GET /api/backtest/leaderboard-comparison/?stat=pts&model=xgb
@@ -1035,7 +1003,7 @@ class LeaderboardComparisonView(APIView):
                 abs_err  = sum(abs(e) for e in errors)
                 err_sum  = sum(errors)
 
-                score, tier   = _pred_score_tier(actuals, errors, run.accuracy)
+                score, tier   = pred_score_tier(actuals, errors, run.accuracy)
                 scores[yr]    = score
                 tiers[yr]     = tier
 
@@ -1157,7 +1125,7 @@ class TierHistoryView(APIView):
             hit_rate = hits / len(chunk)
             abs_err  = sum(abs(e) for e in errors) / len(chunk)
 
-            score, tier = _pred_score_tier(actuals, errors, hit_rate)
+            score, tier = pred_score_tier(actuals, errors, hit_rate)
             windows_out.append({
                 "window_num": win_num,
                 "game_start": start + 1,
