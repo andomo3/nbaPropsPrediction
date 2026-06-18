@@ -1,116 +1,102 @@
-# NBA Period Prop Predictor
+# NBA Props Intelligence
 
-Full-stack scaffold for period-specific NBA prop prediction.
+> **Understand players, not just lines.**
 
-## Architecture Diagram
+NBA Props Intelligence is an open-source analytics platform that goes beyond win/loss prediction. It answers the question serious bettors and basketball analysts actually care about: *under what conditions does a player become predictable — or unpredictable — and why?*
 
-![EERD Diagram](docs/erdplus.png)
+Instead of chasing projections, the platform builds a full behavioral profile for each player: where the model has edge and where it doesn't, how performance shifts by rest, form, and matchup, and what the realistic floor and ceiling look like on any given night. The goal is insight, not a bet slip.
 
-## Quick Start (Backend)
+---
 
-```bash
-docker-compose up -d
-py -m pip install -r backend/requirements.txt
-py backend/manage.py migrate
-py backend/manage.py verify_schema_integrity
-py backend/manage.py runserver
+## What it does
+
+- **Edge Calibration** — measures whether the model's projected edge (projection vs. line) actually translates to higher hit rates. Broken down by rest days, recent form, and edge × rest cross-tabs.
+- **Floor / Ceiling Profiling** — distribution of player outputs with p5–p95 percentiles, boom/bust classification, and condition-specific splits (B2B, hot streak, cold stretch).
+- **Opponent Exploitability** — per-matchup delta vs. season average, hit rate, model bias, and ROI. Surfaces which opponents to target and which to avoid.
+- **Behavioral Fingerprint** — five-dimension radar profile (consistency, edge reliability, matchup sensitivity, form dependence, rest sensitivity) with archetype labeling and a plain-English betting profile.
+- **Predictability Leaderboard** — composite score (R², CV, hit-rate excess) that ranks players by how reliably the model tracks their output. Includes cross-season comparison and rolling tier history.
+
+---
+
+## Architecture
+
+```
+┌─────────────────┐     REST API      ┌──────────────────────┐
+│   React + Vite  │ ────────────────► │   Django + DRF       │
+│   (Recharts,    │                   │   (XGBoost, SHAP,    │
+│    Radix UI)    │                   │    CatBoost)         │
+└─────────────────┘                   └──────────┬───────────┘
+                                                 │
+                              ┌──────────────────┼──────────────────┐
+                              ▼                  ▼                  ▼
+                         PostgreSQL           Redis           Apache Airflow
+                         (results,            (cache)         (ETL pipeline)
+                          models)
 ```
 
-The API will be available at `http://localhost:8000`.
+| Layer | Tech |
+|-------|------|
+| Frontend | React 18, Vite, Tailwind CSS, Recharts, Radix UI |
+| Backend | Django 5, Django REST Framework, Gunicorn |
+| ML | XGBoost, CatBoost, scikit-learn, SHAP |
+| Data | NBA API, The Odds API |
+| Pipeline | Apache Airflow, Apache Spark |
+| Database | PostgreSQL 15 |
+| Cache | Redis |
+| Containers | Docker Compose |
 
-If you change Django models, run:
+---
+
+## Quickstart
+
+### Prerequisites
+
+- Docker Desktop
+- Git
+
+### 1. Clone and configure
+
 ```bash
-py backend/manage.py makemigrations
-py backend/manage.py migrate
+git clone https://github.com/andomo3/nbaPropsPrediction.git
+cd nbaPropsPrediction
+cp .env.example .env
 ```
 
-If you want to run Django inside Docker:
-```bash
-docker-compose up -d --build
-docker-compose exec web python backend/manage.py migrate
+Edit `.env` and set at minimum:
+
+```
+SECRET_KEY=a-long-random-string
+ODDS_API_KEY=your-key-from-the-odds-api.com   # optional for local dev
 ```
 
-If migrations were reset and tables are missing in SQLite, delete
-`backend/db.sqlite3` and run migrations again.
+### 2. Start all services
 
-## Data Ingestion
-
-Source of truth: `backend/docs/DATA_INGESTION_STRATEGY.md`
-
-Dry run (prints a single game's JSON):
 ```bash
-python backend/manage.py ingest_history --dry-run
+docker compose up -d
 ```
 
-Limit games for testing:
+This starts:
+- `web` — Django API at http://localhost:8000
+- `db` — PostgreSQL at port 5432
+- `redis` — Redis at port 6379
+- `airflow-webserver` — Airflow UI at http://localhost:8080
+- `spark-master` — Spark master at http://localhost:8081
+
+### 3. Initialize the database
+
 ```bash
-python backend/manage.py ingest_history --season 2023-24 --max-games 5
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py seed_season_backtest --season 2026
 ```
 
-Tune network timeouts/retries if the NBA API is slow:
+To seed historical seasons:
+
 ```bash
-python backend/manage.py ingest_history --season 2023-24 --timeout 90 --max-retries 5
+docker compose exec web python manage.py seed_season_backtest --season 2025 --force
+docker compose exec web python manage.py seed_season_backtest --season 2024 --force
 ```
 
-Skip games already fully ingested:
-```bash
-python backend/manage.py ingest_history --season 2023-24 --skip-existing
-```
-
-The ingestion script uses jittered delays, exponential cool-downs on timeouts,
-and will skip already ingested periods when resuming.
-
-Quick ingestion summary:
-```bash
-python backend/manage.py summarize_data
-```
-
-## Data Export & Cleaning
-
-MVP export (full-game only, period=0):
-```bash
-python backend/manage.py export_raw
-```
-Output includes `player_team`, `home_team`, and `away_team` for matchup features.
-
-Cleaning pipeline (wide format):
-```bash
-python notebooks/data_cleaning_pipeline.py
-```
-
-Exports are written to the `exports/` folder in the repo root.
-If `exports/nba_mvp_data.csv` exists, the pipeline outputs
-`exports/nba_training_mvp_v1.csv`. Otherwise it uses
-`exports/nba_raw_long.csv` and outputs `exports/nba_training_wide_v1.csv`.
-
-Notebook (combined export + cleaning):
-```bash
-data_export_and_cleaning.ipynb
-```
-
-Feature engineering guide:
-```bash
-docs/ML_FEATURE_GUIDE.md
-```
-
-## Betting Engine API
-
-Manual prediction:
-```bash
-POST /api/predict/manual/
-{ "player_name": "Jayson Tatum", "stat": "pts", "line": 26.5, "opponent": "MIA", "is_home": true, "days_rest": 2 }
-```
-
-Options for dropdowns:
-```bash
-GET /api/options/
-```
-
-Environment:
-- `MODEL_DIR` points to XGBoost model JSON files (e.g. `data/models/pts_xgb.json`).
-- `ODDS_API_KEY` enables on-demand odds fetching in `services/odds_api.py`.
-
-## Frontend (Vite)
+### 4. Start the frontend
 
 ```bash
 cd frontend
@@ -118,4 +104,102 @@ npm install
 npm run dev
 ```
 
-The UI will be available at `http://localhost:5173`.
+Open http://localhost:5173.
+
+---
+
+## Data pipeline
+
+The full pipeline runs through Airflow. Trigger it from http://localhost:8080, or run individual steps manually:
+
+```bash
+# Pull latest game data from NBA API
+docker compose exec web python manage.py collect_nba_data
+
+# Pull odds
+docker compose exec web python manage.py collect_odds_api
+
+# Train models (XGBoost + CatBoost per player/stat)
+docker compose exec web python manage.py train_models
+
+# Backfill backtest results for a season
+docker compose exec web python manage.py seed_season_backtest --season 2026 --force
+```
+
+---
+
+## Project structure
+
+```
+nbaPropsPrediction/
+├── backend/
+│   └── nba_betting/
+│       ├── models.py               # ORM: BacktestRun, BacktestResult, ...
+│       ├── views.py                # API views
+│       ├── urls.py
+│       ├── services/               # Business logic
+│       │   ├── edge_calibration.py
+│       │   ├── floor_ceiling.py
+│       │   ├── opponent_analysis.py
+│       │   ├── player_fingerprint.py
+│       │   └── variance_decomp.py
+│       ├── utils/
+│       │   └── stats.py            # Shared predictability scoring
+│       └── management/commands/    # CLI data pipeline commands
+├── frontend/
+│   └── src/
+│       ├── components/
+│       │   ├── intelligence/       # EdgeCalibration, FloorCeiling, OpponentExploitability, BehavioralFingerprint
+│       │   └── ui/                 # Reusable primitives (SectionCard, Skeleton, InsightText)
+│       └── utils/
+│           ├── constants.js        # API base, player list, stats
+│           └── format.js           # Number/color formatters
+├── dags/                           # Airflow DAGs
+├── docker-compose.yml
+├── Dockerfile
+└── .env.example
+```
+
+---
+
+## API reference
+
+All endpoints are prefixed with `/api/`.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /backtest/leaderboard/` | Predictability scores for all players |
+| `GET /backtest/leaderboard-comparison/?season_a=2025&season_b=2026` | Cross-season score comparison |
+| `GET /analysis/tier-history/?player_name=&stat=&season=` | Rolling predictability tier history |
+| `GET /intelligence/edge/?player_name=&stat=&season=` | Edge calibration analysis |
+| `GET /intelligence/floor-ceiling/?player_name=&stat=&season=` | Floor/ceiling profile |
+| `GET /intelligence/opponents/?player_name=&stat=&season=` | Per-opponent exploitability |
+| `GET /intelligence/fingerprint/?player_name=&stat=&season=` | Behavioral fingerprint |
+
+---
+
+## Predictability score
+
+The composite score that ranks players on the leaderboard is:
+
+```
+score = R²(50%) + inverse-CV(30%) + hit-rate-excess(20%)
+```
+
+- **R²** — how much of the player's actual variance is explained by the model's errors
+- **Inverse-CV** — how consistent the player's raw output is (low variance relative to mean = high score)
+- **Hit-rate excess** — how far above the 52.4% betting break-even the model performs
+
+Tiers: **High** ≥ 65 · **Moderate** ≥ 40 · **Low** < 40
+
+The canonical implementation lives in [`backend/nba_betting/utils/stats.py`](backend/nba_betting/utils/stats.py).
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). All skill levels welcome — data engineering, ML, frontend, and docs are all in scope.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
