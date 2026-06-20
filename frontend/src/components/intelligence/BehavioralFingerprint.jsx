@@ -1,6 +1,7 @@
 import React from 'react';
 import {
     RadarChart, Radar, PolarGrid, PolarAngleAxis,
+    BarChart, Bar, XAxis, YAxis, CartesianGrid,
     ResponsiveContainer, Tooltip,
 } from 'recharts';
 import SectionCard from '../ui/SectionCard';
@@ -9,12 +10,22 @@ import InsightText from '../ui/InsightText';
 import { C, fmt } from '../../utils/format';
 
 const ARCHETYPE_COLOR = {
-    'Sharp Edge Hunter':      C.green,
-    'Form Rider':             C.indigo,
-    'Rest Sensitive':         C.amber,
-    'Matchup Dependent':      C.amber,
-    'Consistent All-Weather': C.green,
-    'High Variance':          C.red,
+    'Consistent Workhorse':     C.green,
+    'Model-Friendly Pick':      C.green,
+    'Balanced All-Rounder':     C.indigo,
+    'Momentum Rider':           C.indigo,
+    'Matchup-Driven Player':    C.amber,
+    'Load-Sensitive Performer': C.amber,
+    'Boom/Bust Gamble':         C.red,
+};
+
+const SHAP_GROUP_LABELS = {
+    form:       'Recent Form',
+    opponent:   'Opponent',
+    minutes:    'Minutes Load',
+    shooting:   'Shooting Eff.',
+    season_avg: 'Season Avg',
+    context:    'Game Context',
 };
 
 const DIM_LABELS = {
@@ -44,6 +55,8 @@ export default function BehavioralFingerprint({ data, loading, error }) {
         archetype,
         radar = [],
         dimensions = {},
+        shap_group_importance = {},
+        shap_available = false,
         strengths = [],
         vulnerabilities = [],
         betting_profile,
@@ -52,7 +65,19 @@ export default function BehavioralFingerprint({ data, loading, error }) {
 
     const archetypeColor = ARCHETYPE_COLOR[archetype] ?? C.slate;
 
-    const radarData = radar.map(d => ({ ...d, fullMark: 100 }));
+    // Use backend-provided radar array; fall back to building from dimensions dict
+    const radarData = radar.length > 0
+        ? radar.map(d => ({ ...d, fullMark: 100 }))
+        : Object.entries(DIM_LABELS).map(([key, label]) => ({
+            dimension: label,
+            value: dimensions[key] ?? 0,
+            fullMark: 100,
+          }));
+
+    const shapEntries = Object.entries(shap_group_importance)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, val]) => ({ group: SHAP_GROUP_LABELS[key] ?? key, value: val }));
 
     return (
         <SectionCard
@@ -70,22 +95,20 @@ export default function BehavioralFingerprint({ data, loading, error }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 {radarData.length > 0 && (
-                    <div>
-                        <ResponsiveContainer width="100%" height={280}>
-                            <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
-                                <PolarGrid stroke="#1e293b" />
-                                <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 10, fill: C.slate }} />
-                                <Tooltip formatter={v => [fmt(v, 0), 'Score']} />
-                                <Radar
-                                    name="Player"
-                                    dataKey="value"
-                                    stroke={archetypeColor}
-                                    fill={archetypeColor}
-                                    fillOpacity={0.25}
-                                />
-                            </RadarChart>
-                        </ResponsiveContainer>
-                    </div>
+                    <ResponsiveContainer width="100%" height={280}>
+                        <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
+                            <PolarGrid stroke="#1e293b" />
+                            <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 10, fill: C.slate }} />
+                            <Tooltip formatter={v => [fmt(v, 0), 'Score']} />
+                            <Radar
+                                name="Player"
+                                dataKey="value"
+                                stroke={archetypeColor}
+                                fill={archetypeColor}
+                                fillOpacity={0.25}
+                            />
+                        </RadarChart>
+                    </ResponsiveContainer>
                 )}
 
                 <div className="space-y-3">
@@ -109,6 +132,33 @@ export default function BehavioralFingerprint({ data, loading, error }) {
                 </div>
             </div>
 
+            {shapEntries.length > 0 && (
+                <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                        <p className="text-xs font-semibold text-muted-foreground">XGBoost feature group importance (SHAP)</p>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                            style={{ background: `${C.indigo}22`, color: C.indigo }}>
+                            SHAP
+                        </span>
+                    </div>
+                    <ResponsiveContainer width="100%" height={160}>
+                        <BarChart data={shapEntries} layout="vertical" margin={{ top: 0, right: 40, left: 80, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                            <XAxis type="number" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10, fill: C.slate }} domain={[0, 100]} />
+                            <YAxis type="category" dataKey="group" tick={{ fontSize: 10, fill: C.slate }} width={80} />
+                            <Tooltip formatter={v => [`${Number(v).toFixed(1)}%`, 'Contribution']} />
+                            <Bar dataKey="value" fill={C.indigo} radius={[0, 3, 3, 0]} fillOpacity={0.8} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+
+            {!shap_available && (
+                <p className="text-[10px] text-muted-foreground mb-4">
+                    SHAP attribution unavailable — dimension scores are heuristic-based.
+                </p>
+            )}
+
             {(strengths.length > 0 || vulnerabilities.length > 0) && (
                 <div className="mb-4">
                     {strengths.length > 0 && (
@@ -127,9 +177,11 @@ export default function BehavioralFingerprint({ data, loading, error }) {
             )}
 
             {betting_profile && (
-                <div className="bg-background/60 border border-border rounded-xl px-4 py-3 mb-2 text-sm text-foreground">
+                <div className="bg-background/60 border border-border rounded-xl px-4 py-3 mb-4 text-sm text-foreground">
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Betting profile</p>
-                    {betting_profile}
+                    <p dangerouslySetInnerHTML={{
+                        __html: betting_profile.replace(/\*\*(.*?)\*\*/g, '<strong class="text-foreground">$1</strong>'),
+                    }} />
                 </div>
             )}
 
