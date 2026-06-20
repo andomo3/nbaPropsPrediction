@@ -20,4 +20,5 @@ urlpatterns = [
     path("intelligence/floor-ceiling/", views.FloorCeilingView.as_view(), name="floor-ceiling"),
     path("intelligence/opponents/", views.OpponentAnalysisView.as_view(), name="opponent-analysis"),
     path("intelligence/fingerprint/", views.PlayerFingerprintView.as_view(), name="player-fingerprint"),
+    path("intelligence/validation/", views.StatisticalValidationView.as_view(), name="statistical-validation"),
 ]

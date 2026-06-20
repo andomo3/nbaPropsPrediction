@@ -1,11 +1,15 @@
+import logging
 from datetime import date
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from scipy.stats import norm
+
+logger = logging.getLogger(__name__)
 
 from .constants import BACKTEST_MODELS, DEFAULT_SEASON, MODEL_LABELS, SEASON_DATES, SEASON_REPORT_PLAYERS
 from .ml.predictor import get_predictor
@@ -16,6 +20,7 @@ from .services.simulator import run_simulation
 from .services.shap_analysis import compute_shap_analysis
 from .services.variance_decomp import compute_variance_decomposition
 from .services.edge_calibration import compute_edge_calibration
+from .services.statistical_validation import compute_statistical_validation
 from .services.floor_ceiling import compute_floor_ceiling
 from .services.opponent_analysis import compute_opponent_analysis
 from .services.player_fingerprint import compute_player_fingerprint
@@ -685,7 +690,7 @@ class LeaderboardView(APIView):
                 "total_games":        run.total_bets,
                 "mae":                round(abs_err / n, 3) if n else 0.0,
                 "bias":               round(err_sum / n, 3) if n else 0.0,
-                "hit_rate":           round(hit_rate, 4),
+                "hit_rate":           round(run.accuracy, 4),
                 "total_pnl":          round(run.total_pnl, 2),
                 "roi":                round(run.roi, 2),
                 "predictability_score": pred_score,
@@ -1171,6 +1176,30 @@ class TierHistoryView(APIView):
 
 # ── Sprint 5: Player Intelligence Suite ──────────────────────────────────────
 
+def _make_cache_key(endpoint, player, stat, season):
+    slug = player.lower().replace(" ", "_")
+    return f"intel:{endpoint}:{slug}:{stat}:{season}"
+
+
+def _intelligence_cache_get(key, fn, ttl=86400):
+    """
+    Try Redis; fall back to calling fn() directly if Redis is unavailable.
+    Logs cache hits so response-time differences are observable in server logs.
+    """
+    try:
+        cached = cache.get(key)
+        if cached is not None:
+            logger.info("cache HIT  %s", key)
+            return cached
+        result = fn()
+        cache.set(key, result, ttl)
+        logger.info("cache MISS %s (stored)", key)
+        return result
+    except Exception as exc:
+        logger.warning("cache error (%s) — running uncached: %s", key, exc)
+        return fn()
+
+
 def _intelligence_preamble(request):
     """Shared validation for all intelligence endpoints. Returns (matched_name, stat, season, err_response)."""
     player_name = request.query_params.get("player_name", "").strip()
@@ -1205,7 +1234,10 @@ class EdgeCalibrationView(APIView):
         if err:
             return err
         try:
-            result = compute_edge_calibration(matched, stat, season)
+            result = _intelligence_cache_get(
+                _make_cache_key("edge", matched, stat, season),
+                lambda: compute_edge_calibration(matched, stat, season),
+            )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
         except Exception as exc:
@@ -1221,7 +1253,10 @@ class FloorCeilingView(APIView):
         if err:
             return err
         try:
-            result = compute_floor_ceiling(matched, stat, season)
+            result = _intelligence_cache_get(
+                _make_cache_key("floor_ceiling", matched, stat, season),
+                lambda: compute_floor_ceiling(matched, stat, season),
+            )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
         except Exception as exc:
@@ -1237,7 +1272,10 @@ class OpponentAnalysisView(APIView):
         if err:
             return err
         try:
-            result = compute_opponent_analysis(matched, stat, season)
+            result = _intelligence_cache_get(
+                _make_cache_key("opponents", matched, stat, season),
+                lambda: compute_opponent_analysis(matched, stat, season),
+            )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
         except Exception as exc:
@@ -1253,9 +1291,31 @@ class PlayerFingerprintView(APIView):
         if err:
             return err
         try:
-            result = compute_player_fingerprint(matched, stat, season)
+            result = _intelligence_cache_get(
+                _make_cache_key("fingerprint", matched, stat, season),
+                lambda: compute_player_fingerprint(matched, stat, season),
+            )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
         except Exception as exc:
             return Response({"detail": f"Fingerprint failed: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(result)
+
+
+class StatisticalValidationView(APIView):
+    """GET /api/intelligence/validation/?player_name=...&stat=pts&season=2026"""
+
+    def get(self, request):
+        matched, stat, season, err = _intelligence_preamble(request)
+        if err:
+            return err
+        try:
+            result = _intelligence_cache_get(
+                _make_cache_key("validation", matched, stat, season),
+                lambda: compute_statistical_validation(matched, stat, season),
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            return Response({"detail": f"Validation failed: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(result)
