@@ -13,7 +13,6 @@ const Layout = () => {
                         links: [
                             { label: 'Leaderboard', href: '/leaderboard' },
                             { label: 'Player Intelligence', href: '/intelligence' },
-                            { label: 'Predictability Profile', href: '/profile' },
                         ],
                     },
                     {
