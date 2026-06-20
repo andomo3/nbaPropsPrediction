@@ -114,3 +114,30 @@ if not CORS_ALLOW_ALL_ORIGINS and not CORS_ALLOWED_ORIGINS:
     ]
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+        "TIMEOUT": 86400,  # 24 hours — season data is static post-season
+        "OPTIONS": {
+            "socket_connect_timeout": 3,
+            "socket_timeout": 3,
+        },
+    }
+}
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {"format": "%(levelname)s %(name)s %(message)s"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "simple"},
+    },
+    "root": {"handlers": ["console"], "level": "WARNING"},
+    "loggers": {
+        "nba_betting": {"handlers": ["console"], "level": "INFO", "propagate": False},
+    },
+}
