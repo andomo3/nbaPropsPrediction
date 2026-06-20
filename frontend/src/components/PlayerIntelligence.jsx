@@ -5,6 +5,7 @@ import EdgeCalibration from './intelligence/EdgeCalibration';
 import FloorCeiling from './intelligence/FloorCeiling';
 import OpponentExploitability from './intelligence/OpponentExploitability';
 import BehavioralFingerprint from './intelligence/BehavioralFingerprint';
+import StatisticalValidation from './intelligence/StatisticalValidation';
 import { PLAYERS, STATS, API_BASE } from '../utils/constants';
 
 function useFetch(url) {
@@ -31,6 +32,7 @@ export default function PlayerIntelligence() {
     const floorCeil   = useFetch(`${API_BASE}/api/intelligence/floor-ceiling/${qs}`);
     const opponents   = useFetch(`${API_BASE}/api/intelligence/opponents/${qs}`);
     const fingerprint = useFetch(`${API_BASE}/api/intelligence/fingerprint/${qs}`);
+    const validation  = useFetch(`${API_BASE}/api/intelligence/validation/${qs}`);
 
     return (
         <div className="min-h-screen bg-background text-foreground p-6 max-w-5xl mx-auto">
@@ -70,6 +72,7 @@ export default function PlayerIntelligence() {
                 </div>
             </div>
 
+            <StatisticalValidation  {...validation} />
             <EdgeCalibration        {...edge} />
             <FloorCeiling           {...floorCeil} />
             <OpponentExploitability {...opponents} />
