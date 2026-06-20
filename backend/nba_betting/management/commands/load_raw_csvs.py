@@ -320,13 +320,25 @@ class Command(BaseCommand):
             default=5000,
             help="Log progress every N PlayerStats rows (default: 5000). Use 0 to disable.",
         )
+        parser.add_argument(
+            "--player-stats-file",
+            default=None,
+            help="Override the PlayerStats CSV filename (default: PlayerStatistics.csv). "
+                 "Accepts a filename relative to --raw-dir or an absolute path.",
+        )
 
     def handle(self, *args, **options):
         raw_dir = Path(options["raw_dir"]).resolve()
         team_histories = raw_dir / "TeamHistories.csv"
         players_csv = raw_dir / "Players.csv"
         games_csv = raw_dir / "Games.csv"
-        player_stats_csv = raw_dir / "PlayerStatistics.csv"
+
+        ps_override = options.get("player_stats_file")
+        if ps_override:
+            ps_path = Path(ps_override)
+            player_stats_csv = ps_path if ps_path.is_absolute() else raw_dir / ps_path
+        else:
+            player_stats_csv = raw_dir / "PlayerStatistics.csv"
 
         if not raw_dir.exists():
             self.stdout.write(self.style.ERROR(f"Raw dir not found: {raw_dir}"))

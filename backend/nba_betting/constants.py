@@ -10,16 +10,27 @@ from datetime import date
 # ── Season Report Card seed players ──────────────────────────────────────────
 
 SEASON_REPORT_PLAYERS = [
+    # Kept — full/near-full 2025-26 seasons
     "Nikola Jokic",
     "Shai Gilgeous-Alexander",
     "Anthony Edwards",
-    "Jayson Tatum",
     "LeBron James",
-    "Stephen Curry",
-    "Giannis Antetokounmpo",
     "Luka Doncic",
-    "Tyrese Haliburton",
-    "Joel Embiid",
+    # Replacing injury-shortened players
+    "De'Aaron Fox",
+    "Jalen Brunson",
+    "Karl-Anthony Towns",
+    "Donovan Mitchell",
+    "Victor Wembanyama",
+    # Expansion — 70+ games, high consistency
+    "Tyrese Maxey",
+    "Jamal Murray",
+    "Evan Mobley",
+    "Jaylen Brown",
+    "Kevin Durant",
+    "Paolo Banchero",
+    "Cade Cunningham",
+    "Devin Booker",
 ]
 
 # ── Season date ranges (keyed by end-year, e.g. 2024 = "2023-24") ────────────
