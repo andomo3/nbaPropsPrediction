@@ -16,9 +16,10 @@ const ARCHETYPE_COLOR = {
     'Boom/Bust Gamble':     C.red,
 };
 
-export default function FloorCeiling({ data, loading, error }) {
-    if (loading) return <SectionCard title="Floor / Ceiling Profile"><Skeleton /></SectionCard>;
-    if (error)   return <SectionCard title="Floor / Ceiling Profile"><p className="text-sm text-red-400">{error}</p></SectionCard>;
+export default function FloorCeiling({ data, loading, error, collapsible = false, defaultOpen = true }) {
+    const cardProps = { title: 'Floor / Ceiling Profile', collapsible, defaultOpen };
+    if (loading) return <SectionCard {...cardProps}><Skeleton /></SectionCard>;
+    if (error)   return <SectionCard {...cardProps}><p className="text-sm text-red-400">{error}</p></SectionCard>;
     if (!data)   return null;
 
     const {
@@ -43,6 +44,8 @@ export default function FloorCeiling({ data, loading, error }) {
         <SectionCard
             title="Floor / Ceiling Profile"
             subtitle="Realistic output range and boom/bust classification"
+            collapsible={collapsible}
+            defaultOpen={defaultOpen}
         >
             <div className="flex items-center gap-6 mb-6 flex-wrap">
                 {[['Floor (p10)', percentiles.p10], ['Median (p50)', percentiles.p50], ['Ceiling (p90)', percentiles.p90], ['Boom/Bust', boom_bust]].map(([label, val]) => (
@@ -64,7 +67,7 @@ export default function FloorCeiling({ data, loading, error }) {
                     <p className="text-xs text-muted-foreground mb-2">Output distribution</p>
                     <ResponsiveContainer width="100%" height={200}>
                         <BarChart data={histData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
                             <XAxis dataKey="mid" tick={{ fontSize: 10, fill: C.slate }} />
                             <YAxis tick={{ fontSize: 11, fill: C.slate }} />
                             <Tooltip formatter={v => [v, 'Games']} />
@@ -111,7 +114,7 @@ export default function FloorCeiling({ data, loading, error }) {
                     <p className="text-xs font-semibold text-muted-foreground mb-2">Roster boom/bust comparison</p>
                     <ResponsiveContainer width="100%" height={180}>
                         <BarChart data={roster_comparison} margin={{ top: 8, right: 16, left: 0, bottom: 40 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
                             <XAxis dataKey="player_name" tick={{ fontSize: 9, fill: C.slate }} angle={-30} textAnchor="end" interval={0} />
                             <YAxis tick={{ fontSize: 11, fill: C.slate }} />
                             <Tooltip formatter={v => [Number(v).toFixed(2), 'Boom/Bust']} />

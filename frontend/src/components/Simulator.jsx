@@ -284,7 +284,7 @@ const Simulator = () => {
 
                         <ResponsiveContainer width="100%" height={320}>
                             <ComposedChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
                                 <XAxis
                                     dataKey="gameNum"
                                     tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }}
@@ -302,9 +302,9 @@ const Simulator = () => {
                                 {splitX && (
                                     <ReferenceLine
                                         x={Math.round(splitX)}
-                                        stroke="rgba(255,255,255,0.2)"
+                                        stroke="#b0a89e"
                                         strokeDasharray="4 4"
-                                        label={{ value: 'Projection →', position: 'insideTopRight', fontSize: 10, fill: 'rgba(255,255,255,0.4)' }}
+                                        label={{ value: 'Projection →', position: 'insideTopRight', fontSize: 10, fill: '#b0a89e' }}
                                     />
                                 )}
 

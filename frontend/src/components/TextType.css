@@ -1,12 +1,11 @@
 .text-type {
-  display: inline-block;
+  display: block;
   white-space: pre-wrap;
 }
 
 .text-type__cursor {
-  margin-left: 0.25rem;
-  display: inline-block;
-  opacity: 1;
+  margin-left: 0.05em;
+  display: inline;
 }
 
 .text-type__cursor--hidden {
@@ -14,5 +13,5 @@
 }
 
 .text-type__content {
-  display: inline-block;
+  display: inline;
 }
