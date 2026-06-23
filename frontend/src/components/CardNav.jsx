@@ -1,171 +1,63 @@
-﻿import { useLayoutEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowUpRight } from 'lucide-react';
-import { gsap } from 'gsap';
+import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import './CardNav.css';
 import logo from '../assets/perchave_final.png';
 
-const CardNav = ({
-    logoText = 'PropEdge',
-    items = [],
-    className = '',
-    ease = 'power3.out',
-}) => {
-    const [isHamburgerOpen, setIsHamburgerOpen] = useState(false);
-    const [isExpanded, setIsExpanded] = useState(false);
-    const navRef = useRef(null);
-    const cardsRef = useRef([]);
-    const tlRef = useRef(null);
+const NAV_LINKS = [
+    { label: 'Leaderboard', href: '/leaderboard' },
+    { label: 'Intelligence', href: '/intelligence' },
+];
 
-    const calculateHeight = () => {
-        const navEl = navRef.current;
-        if (!navEl) return 300;
+const CardNav = ({ logoText = 'perChance' }) => {
+    const [open, setOpen] = useState(false);
+    const location = useLocation();
 
-        const contentEl = navEl.querySelector('.card-nav-content');
-        if (!contentEl) return 300;
-
-        const wasVisible = contentEl.style.visibility;
-        const wasPointerEvents = contentEl.style.pointerEvents;
-        const wasPosition = contentEl.style.position;
-        const wasHeight = contentEl.style.height;
-
-        contentEl.style.visibility = 'visible';
-        contentEl.style.pointerEvents = 'auto';
-        contentEl.style.position = 'static';
-        contentEl.style.height = 'auto';
-
-        contentEl.offsetHeight;
-
-        const topBar = 104;
-        const padding = 16;
-        const contentHeight = contentEl.scrollHeight;
-
-        contentEl.style.visibility = wasVisible;
-        contentEl.style.pointerEvents = wasPointerEvents;
-        contentEl.style.position = wasPosition;
-        contentEl.style.height = wasHeight;
-
-        return topBar + contentHeight + padding;
-    };
-
-    const createTimeline = () => {
-        const navEl = navRef.current;
-        if (!navEl) return null;
-
-        gsap.set(navEl, { height: 104, overflow: 'hidden' });
-        gsap.set(cardsRef.current, { y: 50, opacity: 0 });
-
-        const tl = gsap.timeline({ paused: true });
-
-        tl.to(navEl, {
-            height: calculateHeight,
-            duration: 0.4,
-            ease,
-        });
-
-        tl.to(cardsRef.current, { y: 0, opacity: 1, duration: 0.4, ease, stagger: 0.08 }, '-=0.1');
-
-        return tl;
-    };
-
-    useLayoutEffect(() => {
-        const tl = createTimeline();
-        tlRef.current = tl;
-
-        return () => {
-            tl?.kill();
-            tlRef.current = null;
-        };
-    }, [ease, items]);
-
-    useLayoutEffect(() => {
-        const handleResize = () => {
-            if (!tlRef.current) return;
-
-            if (isExpanded) {
-                const newHeight = calculateHeight();
-                gsap.set(navRef.current, { height: newHeight });
-
-                tlRef.current.kill();
-                const newTl = createTimeline();
-                if (newTl) {
-                    newTl.progress(1);
-                    tlRef.current = newTl;
-                }
-            } else {
-                tlRef.current.kill();
-                const newTl = createTimeline();
-                if (newTl) {
-                    tlRef.current = newTl;
-                }
-            }
-        };
-
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [isExpanded]);
-
-    const toggleMenu = () => {
-        const tl = tlRef.current;
-        if (!tl) return;
-        if (!isExpanded) {
-            setIsHamburgerOpen(true);
-            setIsExpanded(true);
-            tl.play(0);
-        } else {
-            setIsHamburgerOpen(false);
-            tl.eventCallback('onReverseComplete', () => setIsExpanded(false));
-            tl.reverse();
-        }
-    };
-
-    const setCardRef = (i) => (el) => {
-        if (el) cardsRef.current[i] = el;
-    };
+    useEffect(() => setOpen(false), [location.pathname]);
 
     return (
-        <div className={`card-nav-container ${className}`}>
-            <nav ref={navRef} className={`card-nav ${isExpanded ? 'open' : ''}`}>
-                <div className="card-nav-top">
-                    <div
-                        className={`hamburger-menu ${isHamburgerOpen ? 'open' : ''}`}
-                        onClick={toggleMenu}
-                        role="button"
-                        aria-label={isExpanded ? 'Close menu' : 'Open menu'}
-                        tabIndex={0}
-                    >
-                        <div className="hamburger-line" />
-                        <div className="hamburger-line" />
-                    </div>
+        <header className="card-nav-container">
+            <div className="card-nav-inner">
+                <Link to="/" className="logo-link">
+                    <img src={logo} alt={logoText} className="logo" />
+                </Link>
 
-                    <div className="logo-container">
-                        <Link to="/" className="inline-flex items-center">
-                            <img src={logo} alt={`${logoText} logo`} className="logo" />
+                <nav className="nav-links" aria-label="Primary navigation">
+                    {NAV_LINKS.map((link) => (
+                        <Link
+                            key={link.href}
+                            to={link.href}
+                            className={`nav-link${location.pathname === link.href ? ' nav-link-active' : ''}`}
+                        >
+                            {link.label}
                         </Link>
-                    </div>
-
-                    <a href="/overview" className="card-nav-cta-button">
-                        How It Works
-                    </a>
-                </div>
-
-                <div className="card-nav-content" aria-hidden={!isExpanded}>
-                    {(items || []).slice(0, 3).map((item, idx) => (
-                        <div key={`${item.label}-${idx}`} className="nav-card" ref={setCardRef(idx)}>
-                            <div className="nav-card-label">{item.label}</div>
-                            <div className="nav-card-links">
-                                {item.links?.map((lnk, i) => (
-                                    <a key={`${lnk.label}-${i}`} className="nav-card-link" href={lnk.href}>
-                                        <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-                                        {lnk.label}
-                                    </a>
-                                ))}
-                            </div>
-                        </div>
                     ))}
-                </div>
+                    <Link to="/overview" className="nav-cta">
+                        How It Works
+                    </Link>
+                </nav>
+
+                <button
+                    className={`nav-hamburger${open ? ' open' : ''}`}
+                    onClick={() => setOpen((o) => !o)}
+                    aria-label={open ? 'Close menu' : 'Open menu'}
+                    aria-expanded={open}
+                >
+                    <span />
+                    <span />
+                </button>
+            </div>
+
+            <nav className={`nav-mobile${open ? ' open' : ''}`} aria-label="Mobile navigation">
+                {NAV_LINKS.map((link) => (
+                    <Link key={link.href} to={link.href} className="nav-mobile-link">
+                        {link.label}
+                    </Link>
+                ))}
+                <Link to="/overview" className="nav-mobile-link nav-mobile-cta">
+                    How It Works
+                </Link>
             </nav>
-        </div>
+        </header>
     );
 };
 

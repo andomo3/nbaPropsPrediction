@@ -1,32 +1,48 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: oklch(0.07 0.01 260);
-    --foreground: oklch(0.95 0 0);
-    --card: oklch(0.1 0.015 260);
-    --primary: oklch(0.75 0.15 195);
-    --secondary: oklch(0.15 0.01 260);
-    --muted-foreground: oklch(0.6 0 0);
-    --border: oklch(0.2 0.015 260);
-    --input: oklch(0.12 0.01 260);
-    --chart-1: oklch(0.75 0.15 195);
-    --chart-2: oklch(0.7 0.12 220);
-    --chart-3: oklch(0.8 0.15 165);
-    --chart-4: oklch(0.6 0.2 25);
-    --primary-foreground: var(--background);
-    --secondary-foreground: var(--foreground);
-    --popover: var(--card);
-    --popover-foreground: var(--foreground);
-    --accent: var(--secondary);
-    --accent-foreground: var(--foreground);
-    --muted: var(--secondary);
-    --destructive: var(--chart-4);
-    --destructive-foreground: var(--foreground);
-    --ring: var(--primary);
+    /* Backgrounds — dark warm charcoal (not cold navy) */
+    --background: oklch(0.08 0.007 50);
+    --foreground: oklch(0.95 0.007 80);
+    --card: oklch(0.12 0.009 50);
+
+    /* Primary — indigo, bright for dark surfaces */
+    --primary: oklch(0.65 0.2 264);
+    --primary-foreground: oklch(0.08 0.007 50);
+
+    /* Secondary surfaces */
+    --secondary: oklch(0.16 0.009 50);
+    --secondary-foreground: oklch(0.95 0.007 80);
+
+    /* Borders, inputs, muted */
+    --muted: oklch(0.16 0.009 50);
+    --muted-foreground: oklch(0.55 0.008 60);
+    --border: oklch(0.22 0.012 50);
+    --input: oklch(0.16 0.009 50);
+
+    /* Accent */
+    --accent: oklch(0.16 0.009 50);
+    --accent-foreground: oklch(0.95 0.007 80);
+
+    /* Semantic */
+    --destructive: oklch(0.62 0.22 25);
+    --destructive-foreground: oklch(0.95 0.007 80);
+    --ring: oklch(0.65 0.2 264);
+
+    /* Popovers */
+    --popover: oklch(0.12 0.009 50);
+    --popover-foreground: oklch(0.95 0.007 80);
+
+    /* Chart palette — calibrated for dark backgrounds */
+    --chart-1: oklch(0.65 0.2 264);   /* indigo */
+    --chart-2: oklch(0.62 0.16 220);  /* blue */
+    --chart-3: oklch(0.65 0.18 165);  /* teal */
+    --chart-4: oklch(0.65 0.22 25);   /* red/orange */
+
     --radius: 0.5rem;
   }
 
@@ -54,60 +70,57 @@
   }
 }
 
-/* Custom Scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--background);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.2 0.015 260);
-  border-radius: 4px;
+  background: oklch(0.25 0.012 50);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.25 0.02 260);
+  background: oklch(0.32 0.015 50);
 }
 
+/* Hero typewriter cursor */
+@keyframes hero-blink {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 0; }
+}
+.hero-cursor        { opacity: 0.6; }
+.hero-cursor-blink  { animation: hero-blink 1s step-start infinite; }
+
+/* Utility animations */
 @keyframes expand {
-  0% {
-    width: 0;
-  }
-  100% {
-    width: 100%;
-  }
+  0%   { width: 0; }
+  100% { width: 100%; }
 }
 
 .animate-expand {
   animation: expand var(--expand-duration, 3s) ease-out forwards;
 }
 
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 @keyframes ping {
-  75%,
-  100% {
-    transform: scale(2);
-    opacity: 0;
-  }
+  75%, 100% { transform: scale(2); opacity: 0; }
 }
 
 @keyframes bounce {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-4px); }
 }

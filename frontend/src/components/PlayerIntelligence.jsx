@@ -35,15 +35,23 @@ export default function PlayerIntelligence() {
     const validation  = useFetch(`${API_BASE}/api/intelligence/validation/${qs}`);
 
     return (
-        <div className="min-h-screen bg-background text-foreground p-6 max-w-5xl mx-auto">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-foreground">Player Intelligence</h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                    Conditional edge analysis · floor/ceiling profiling · opponent exploitability · behavioral fingerprint
+        <div className="w-full max-w-4xl mx-auto py-10">
+
+            {/* Page header */}
+            <div className="mb-10">
+                <p className="text-xs font-semibold tracking-widest uppercase text-muted-foreground mb-3">
+                    Player Intelligence
+                </p>
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+                    {player}
+                </h1>
+                <p className="text-sm text-muted-foreground mt-2">
+                    Edge calibration · floor/ceiling · opponent exploitability · behavioral fingerprint
                 </p>
             </div>
 
-            <div className="flex items-center gap-4 mb-6 flex-wrap">
+            {/* Controls */}
+            <div className="flex items-center gap-4 mb-10 flex-wrap">
                 <Select value={player} onValueChange={setPlayer}>
                     <SelectTrigger className="w-56">
                         <SelectValue placeholder="Select player" />
@@ -55,14 +63,14 @@ export default function PlayerIntelligence() {
                     </SelectContent>
                 </Select>
 
-                <div className="flex gap-1">
+                <div className="flex gap-1.5">
                     {STATS.map(s => (
                         <button
                             key={s.key}
                             onClick={() => setStat(s.key)}
-                            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                            className={`px-5 py-2 rounded-lg text-xs font-semibold tracking-wide uppercase transition-colors ${
                                 stat === s.key
-                                    ? 'bg-indigo-500 text-white'
+                                    ? 'bg-primary text-primary-foreground'
                                     : 'bg-card border border-border text-muted-foreground hover:text-foreground'
                             }`}
                         >
@@ -72,11 +80,29 @@ export default function PlayerIntelligence() {
                 </div>
             </div>
 
-            <StatisticalValidation  {...validation} />
-            <EdgeCalibration        {...edge} />
-            <FloorCeiling           {...floorCeil} />
-            <OpponentExploitability {...opponents} />
-            <BehavioralFingerprint  {...fingerprint} />
+            {/* Sections — Statistical Validation always open; detail sections collapsible */}
+            <StatisticalValidation {...validation} />
+
+            <EdgeCalibration
+                {...edge}
+                collapsible
+                defaultOpen={true}
+            />
+            <FloorCeiling
+                {...floorCeil}
+                collapsible
+                defaultOpen={false}
+            />
+            <OpponentExploitability
+                {...opponents}
+                collapsible
+                defaultOpen={false}
+            />
+            <BehavioralFingerprint
+                {...fingerprint}
+                collapsible
+                defaultOpen={false}
+            />
         </div>
     );
 }
