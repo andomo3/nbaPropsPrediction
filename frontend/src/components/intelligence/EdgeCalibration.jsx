@@ -33,9 +33,10 @@ function SplitRow({ r }) {
     );
 }
 
-export default function EdgeCalibration({ data, loading, error }) {
-    if (loading) return <SectionCard title="Edge Calibration"><Skeleton /></SectionCard>;
-    if (error)   return <SectionCard title="Edge Calibration"><p className="text-sm text-red-400">{error}</p></SectionCard>;
+export default function EdgeCalibration({ data, loading, error, collapsible = false, defaultOpen = true }) {
+    const cardProps = { title: 'Edge Calibration', collapsible, defaultOpen };
+    if (loading) return <SectionCard {...cardProps}><Skeleton /></SectionCard>;
+    if (error)   return <SectionCard {...cardProps}><p className="text-sm text-red-400">{error}</p></SectionCard>;
     if (!data)   return null;
 
     const { edge_bands = [], rest_analysis = [], form_analysis = [], cross_tab = [], best_threshold, insight } = data;
@@ -44,6 +45,8 @@ export default function EdgeCalibration({ data, loading, error }) {
         <SectionCard
             title="Edge Calibration"
             subtitle="Does a larger model edge actually translate to profit?"
+            collapsible={collapsible}
+            defaultOpen={defaultOpen}
         >
             {best_threshold && (
                 <div className="border border-green-500 bg-green-500/10 rounded-xl px-4 py-3 mb-4 text-sm text-foreground">
@@ -59,7 +62,7 @@ export default function EdgeCalibration({ data, loading, error }) {
                     <p className="text-xs text-muted-foreground mb-2">Hit rate by projected edge bucket</p>
                     <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={edge_bands} margin={{ top: 16, right: 16, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
                             <XAxis dataKey="bucket" tick={{ fontSize: 11, fill: C.slate }} />
                             <YAxis tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} tick={{ fontSize: 11, fill: C.slate }} />
                             <Tooltip content={<EdgeBandTooltip />} />

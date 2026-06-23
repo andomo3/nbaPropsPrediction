@@ -260,7 +260,7 @@ const Backtest = () => {
                             </p>
                             <ResponsiveContainer width="100%" height={220}>
                                 <LineChart data={chartData} margin={{ top: 4, right: 12, bottom: 4, left: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
                                     <XAxis
                                         dataKey="date"
                                         tick={{ fontSize: 10, fill: '#888' }}
@@ -270,8 +270,8 @@ const Backtest = () => {
                                     <YAxis tick={{ fontSize: 10, fill: '#888' }} />
                                     <Tooltip
                                         contentStyle={{
-                                            background: 'hsl(var(--card))',
-                                            border: '1px solid hsl(var(--border))',
+                                            background: 'var(--card)',
+                                            border: '1px solid var(--border)',
                                             borderRadius: '8px',
                                             fontSize: 12,
                                         }}

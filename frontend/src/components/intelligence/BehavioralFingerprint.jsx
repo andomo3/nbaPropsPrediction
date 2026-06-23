@@ -46,9 +46,10 @@ function StrengthChip({ label, good }) {
     );
 }
 
-export default function BehavioralFingerprint({ data, loading, error }) {
-    if (loading) return <SectionCard title="Behavioral Fingerprint"><Skeleton /></SectionCard>;
-    if (error)   return <SectionCard title="Behavioral Fingerprint"><p className="text-sm text-red-400">{error}</p></SectionCard>;
+export default function BehavioralFingerprint({ data, loading, error, collapsible = false, defaultOpen = true }) {
+    const cardProps = { title: 'Behavioral Fingerprint', collapsible, defaultOpen };
+    if (loading) return <SectionCard {...cardProps}><Skeleton /></SectionCard>;
+    if (error)   return <SectionCard {...cardProps}><p className="text-sm text-red-400">{error}</p></SectionCard>;
     if (!data)   return null;
 
     const {
@@ -83,6 +84,8 @@ export default function BehavioralFingerprint({ data, loading, error }) {
         <SectionCard
             title="Behavioral Fingerprint"
             subtitle="Five-dimension player profile for bet selection"
+            collapsible={collapsible}
+            defaultOpen={defaultOpen}
         >
             {archetype && (
                 <div className="mb-6">
@@ -97,7 +100,7 @@ export default function BehavioralFingerprint({ data, loading, error }) {
                 {radarData.length > 0 && (
                     <ResponsiveContainer width="100%" height={280}>
                         <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
-                            <PolarGrid stroke="#1e293b" />
+                            <PolarGrid stroke="rgba(255,255,255,0.12)" />
                             <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 10, fill: C.slate }} />
                             <Tooltip formatter={v => [fmt(v, 0), 'Score']} />
                             <Radar
@@ -143,7 +146,7 @@ export default function BehavioralFingerprint({ data, loading, error }) {
                     </div>
                     <ResponsiveContainer width="100%" height={160}>
                         <BarChart data={shapEntries} layout="vertical" margin={{ top: 0, right: 40, left: 80, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" horizontal={false} />
                             <XAxis type="number" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10, fill: C.slate }} domain={[0, 100]} />
                             <YAxis type="category" dataKey="group" tick={{ fontSize: 10, fill: C.slate }} width={80} />
                             <Tooltip formatter={v => [`${Number(v).toFixed(1)}%`, 'Contribution']} />

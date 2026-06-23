@@ -39,3 +39,6 @@ out/
 
 # Data
 /data/raw/
+
+# Claude Code — agent definitions, memory, and local session state
+.claude/
