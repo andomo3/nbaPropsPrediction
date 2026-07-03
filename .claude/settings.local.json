@@ -21,7 +21,17 @@
       "Bash(python research/_build_notebook.py)",
       "Bash(python -c \"import json; nb=json.load\\(open\\('research/nba_prop_prediction_walkthrough.ipynb', encoding='utf-8'\\)\\); print\\('cells:', len\\(nb['cells']\\)\\); print\\('types:', [c['cell_type'] for c in nb['cells']]\\)\")",
       "Bash(python -c \"from nba_betting.utils.dates import et_today; print\\('ET today:', et_today\\(\\)\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(python3 -c \"from scipy import stats; help\\(stats.binom_test\\)\")",
+      "Bash(python3 -c \"from scipy import stats; help\\(stats.spearmanr\\)\")",
+      "Bash(python3 -c \"from scipy import stats; help\\(stats.ttest_1samp\\)\")",
+      "Bash(python3)",
+      "PowerShell(python -c \"import inspect; from scipy import stats; print\\('=== binom_test ==='\\); print\\(inspect.signature\\(stats.binom_test\\)\\); print\\('\\\\n=== spearmanr ==='\\); print\\(inspect.signature\\(stats.spearmanr\\)\\); print\\('\\\\n=== ttest_1samp ==='\\); print\\(inspect.signature\\(stats.ttest_1samp\\)\\)\")",
+      "Bash(python -c \"from backend.nba_betting.services.statistical_validation import compute_statistical_validation; print\\('OK'\\)\")",
+      "Bash(docker compose exec web python manage.py shell -c ' *)",
+      "Bash(ls -lh data/raw/PlayerStatisticsExtended.csv data/raw/PlayerStatistics.csv)",
+      "Bash(dir data\\\\raw\\\\*.csv)",
+      "Bash(echo \".claude/\" >> \"C:\\\\Users\\\\maxst\\\\Desktop\\\\Projects\\\\nbaPropsPrediction\\\\.git\\\\info\\\\exclude\" && cat \"C:\\\\Users\\\\maxst\\\\Desktop\\\\Projects\\\\nbaPropsPrediction\\\\.git\\\\info\\\\exclude\")"
     ]
   }
 }

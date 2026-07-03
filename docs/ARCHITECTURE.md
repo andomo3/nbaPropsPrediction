@@ -1,4 +1,4 @@
-# NBA Props Intelligence — System Architecture
+# Perchance — System Architecture
 
 > Last updated: 2026-07-03. Describes the current production system: per-stat **regression** models
 > (the earlier binary over/under classifier is retired — see [History](#11-history)).
@@ -25,7 +25,7 @@
 
 ## 1. System Overview
 
-NBA Props Intelligence is a full-stack NBA player-props analysis platform. For a chosen player,
+Perchance is a full-stack NBA player-props analysis platform. For a chosen player,
 stat (points, rebounds, or assists), and opponent, it:
 
 1. **Projects the stat value** with a per-stat XGBoost regression model

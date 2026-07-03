@@ -1,6 +1,6 @@
-# NBA Props Intelligence — Methodology
+# Perchance — Methodology
 
-This document describes, end to end, how NBA Props Intelligence turns historical box scores into player-prop projections, probabilities, backtests, and statistical verdicts — and, just as importantly, what the system assumes and where it falls short. **Section 8 (Assumptions & Limitations) is first-class content**: if you plan to cite any number this system produces, read it.
+This document describes, end to end, how Perchance turns historical box scores into player-prop projections, probabilities, backtests, and statistical verdicts — and, just as importantly, what the system assumes and where it falls short. **Section 8 (Assumptions & Limitations) is first-class content**: if you plan to cite any number this system produces, read it.
 
 The code is the source of truth. Every claim below cites the implementing file; if this document and the code ever disagree, the code wins and this document has a bug. Metrics and split dates reflect the models trained on **2026-07-03** (`data/models/model_metadata.json`).
 
@@ -115,7 +115,7 @@ Test-set metrics for the 2026-07-03 models (`data/models/model_metadata.json`; t
 | Rebounds | **1.99** | 2.61 | 1.99 | 1.99 | 1.99 |
 | Assists | **1.49** | 1.96 | 1.49 | 1.49 | 1.48 |
 
-Read these honestly: a typical points projection misses by about **5 points**, rebounds by **2**, assists by **1.5**. Two things are worth noticing. First, train/val/test metrics are close (pts MAE 4.65 / 4.90 / 4.95), so the models are not badly overfit. Second, **plain linear regression is within ~0.03 MAE of XGBoost on every stat** — nearly all of the extractable signal lives in the rolling averages themselves, and player-game outcomes are dominated by variance no box-score feature set explains. NBA Props Intelligence's headline value is *quantifying* that predictability ceiling per player, not claiming to beat it.
+Read these honestly: a typical points projection misses by about **5 points**, rebounds by **2**, assists by **1.5**. Two things are worth noticing. First, train/val/test metrics are close (pts MAE 4.65 / 4.90 / 4.95), so the models are not badly overfit. Second, **plain linear regression is within ~0.03 MAE of XGBoost on every stat** — nearly all of the extractable signal lives in the rolling averages themselves, and player-game outcomes are dominated by variance no box-score feature set explains. Perchance's headline value is *quantifying* that predictability ceiling per player, not claiming to beat it.
 
 ---
 

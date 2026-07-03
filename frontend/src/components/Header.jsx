@@ -10,7 +10,7 @@ const Header = () => {
                     <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
                         <Activity className="h-4 w-4 text-primary" />
                     </div>
-                    <span className="text-lg font-semibold text-foreground tracking-tight">PropEdge</span>
+                    <span className="text-lg font-semibold text-foreground tracking-tight">Perchance</span>
                 </Link>
                 <nav className="hidden md:flex items-center gap-8">
                     <NavLink
