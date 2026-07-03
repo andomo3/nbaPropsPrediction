@@ -46,7 +46,7 @@ Instead of chasing projections, the platform builds a full behavioral profile fo
 | Frontend | React 18, Vite, Tailwind CSS, Recharts, Radix UI |
 | Backend | Django 5, Django REST Framework, Gunicorn |
 | ML | XGBoost, CatBoost, scikit-learn, SHAP |
-| Data | NBA API, The Odds API |
+| Data | ESPN unofficial API (box scores), Kaggle NBA box-score archive (training), The Odds API (optional) |
 | Pipeline | Apache Airflow, Apache Spark |
 | Database | PostgreSQL 15 |
 | Cache | Redis |
@@ -82,25 +82,33 @@ ODDS_API_KEY=your-key-from-the-odds-api.com   # optional for local dev
 docker compose up -d
 ```
 
-This starts:
-- `web` — Django API at http://localhost:8000
+The first run builds nine containers (Django, two Postgres instances, Redis, Airflow webserver/scheduler/init, Spark master + worker) and compiles the ML stack — expect **5–10 minutes**. Subsequent starts are fast. Once up:
+
+- `web` — Django API at http://localhost:8000 (sanity check: http://localhost:8000/health/ → `{"status": "ok"}`; the bare root URL is a 404, that's normal)
 - `db` — PostgreSQL at port 5432
 - `redis` — Redis at port 6379
-- `airflow-webserver` — Airflow UI at http://localhost:8080
-- `spark-master` — Spark master at http://localhost:8081
+- `airflow-webserver` — Airflow UI at http://localhost:8080 (login `admin` / `admin`)
+- `spark-master` — Spark master UI at http://localhost:8081
 
-### 3. Initialize the database
+### 3. Initialize the database and load data
 
 ```bash
 docker compose exec web python manage.py migrate
+
+# Pull real box scores from ESPN's unofficial API — no key required.
+# --days 60 is a quick taste; the backtests below only cover whatever
+# window you sync, so more days = more complete results.
+docker compose exec web python manage.py sync_espn_games --days 60
+
+# Precompute season backtests for the player roster
 docker compose exec web python manage.py seed_season_backtest --season 2026
 ```
 
-To seed historical seasons:
+The seed command logs a warning for any player/date range it has no synced games for — with a partial sync that's expected, not an error. To backfill the full 2025–26 season (roughly 15–30 minutes of polite ESPN polling), sync from opening night onward, then re-seed:
 
 ```bash
-docker compose exec web python manage.py seed_season_backtest --season 2025 --force
-docker compose exec web python manage.py seed_season_backtest --season 2024 --force
+docker compose exec web python manage.py sync_espn_games --date 20260630 --days 260
+docker compose exec web python manage.py seed_season_backtest --season 2026 --force
 ```
 
 ### 4. Start the frontend
@@ -117,20 +125,27 @@ Open http://localhost:5173.
 
 ## Data pipeline
 
-The full pipeline runs through Airflow. Trigger it from http://localhost:8080, or run individual steps manually:
+Day-to-day game data comes from ESPN's unofficial API — free, no key required:
 
 ```bash
-# Pull latest game data from NBA API
-docker compose exec web python manage.py collect_nba_data
+# Sync today's games / a specific date / a backfill window
+docker compose exec web python manage.py sync_espn_games
+docker compose exec web python manage.py sync_espn_games --date 20260110
+docker compose exec web python manage.py sync_espn_games --days 60
 
-# Pull odds
-docker compose exec web python manage.py collect_odds_api
-
-# Train models (XGBoost + CatBoost per player/stat)
-docker compose exec web python manage.py train_models
+# Generate daily picks from synced games
+docker compose exec web python manage.py generate_daily_picks
 
 # Backfill backtest results for a season
 docker compose exec web python manage.py seed_season_backtest --season 2026 --force
+```
+
+The Spark feature-engineering pipeline runs through Airflow — trigger it from http://localhost:8080 (`admin` / `admin`).
+
+**Retraining models** is optional — trained models ship in `data/models/`. It requires the full historical box-score CSV (a Kaggle-hosted archive of NBA API box scores, ~300 MB, not tracked in git; see [data/sample/README.md](data/sample/README.md) for provenance). Place it at `data/raw/PlayerStatistics.csv`, then:
+
+```bash
+docker compose exec web python manage.py train_models
 ```
 
 ---

@@ -29,6 +29,7 @@ cd nbaPropsPrediction
 cp .env.example .env
 docker compose up -d
 docker compose exec web python manage.py migrate
+docker compose exec web python manage.py sync_espn_games --days 60
 docker compose exec web python manage.py seed_season_backtest --season 2026
 cd frontend && npm install && npm run dev
 ```
@@ -44,7 +45,7 @@ docker compose exec web python manage.py <command>
 Key locations:
 - Business logic → `backend/nba_betting/services/`
 - Shared stat utilities → `backend/nba_betting/utils/stats.py`
-- API views → `backend/nba_betting/views.py`
+- API views → `backend/nba_betting/views/` (predictions, picks, backtests, intelligence)
 - URL routing → `backend/nba_betting/urls.py`
 
 When adding a new analysis service, follow the pattern in `services/edge_calibration.py`:

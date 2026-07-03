@@ -245,14 +245,39 @@ with DAG(
     )
 
     # ------------------------------------------------------------------
-    # T4: Recreate view_final_features (joins base data + derived store)
-    # The Spark job truncates derived_features_store; the view is
+    # T4: Recreate views (base data + final features)
+    # The Spark job truncates derived_features_store; the views are
     # refreshed here so downstream queries see up-to-date data.
+    # view_base_data is included because scripts/db_init.sql skips both
+    # views when initdb runs before Django migrations (fresh volume) —
+    # this task is what guarantees they exist.
     # ------------------------------------------------------------------
     recreate_view = PostgresOperator(
         task_id="recreate_final_features_view",
         postgres_conn_id="nba_postgres",
         sql="""
+            CREATE OR REPLACE VIEW public.view_base_data AS
+            SELECT
+                ps.player_id,
+                ps.game_id,
+                g.date,
+                g.season,
+                p.first_name || ' ' || p.last_name  AS player_name,
+                CASE
+                    WHEN ps.team_id = g.home_team_id THEN g.away_team_id
+                    ELSE g.home_team_id
+                END                                  AS opponent_id,
+                ps.min,
+                ps.pts,
+                ps.reb,
+                ps.ast,
+                ps.fga,
+                ps.fgm
+            FROM  public.nba_betting_playerstats  ps
+            JOIN  public.nba_betting_game         g  ON g.game_id   = ps.game_id
+            JOIN  public.nba_betting_player       p  ON p.nba_id    = ps.player_id
+            WHERE ps.period = 0;
+
             CREATE OR REPLACE VIEW public.view_final_features AS
             SELECT
                 b.*,

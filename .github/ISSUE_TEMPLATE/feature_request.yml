@@ -1,0 +1,22 @@
+name: Feature request
+description: Propose a new analysis, stat, model, or UI improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What question or gap does this address?
+      description: For new analyses, say what it measures and why it's meaningful (same bar as the PR guideline in CONTRIBUTING.md).
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Rough sketch is fine — which layer (data / ML / backend / frontend / docs) and what would change.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

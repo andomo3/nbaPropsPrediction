@@ -50,7 +50,7 @@ Owner: `docs-writer` (claims verified against post-refactor code).
 
 - **`docs/METHODOLOGY.md`** (the publication-critical doc): data sources & filters (MIN_YEAR=2016, MIN_MINUTES=10), feature definitions with formulas, model training & chronological/walk-forward splits, the leakage-prevention design, probability model, the four validation tests with their null hypotheses, and a first-class **Assumptions & Limitations** section built from the Phase 1 assumptions list.
 - **README refresh**: honest scope statement ("insight, not a bet slip" is good — keep it), link METHODOLOGY.md, responsible-gambling note, badges/CI.
-- **`docs/API.md`**: every endpoint with params and example responses.
+- **`docs/API.md`**: every endpoint with params and example responses. *(Resolved: folded into `docs/ARCHITECTURE.md` §7, which covers all 18 endpoints in `urls.py`; README carries the short table.)*
 - **Archive stale docs** to `docs/archive/` with deprecation banners: `IMPLEMENTATION_PLAN.md`, `backend/docs/DATA_INGESTION_STRATEGY.md`; rewrite `ML_FEATURE_GUIDE.md` from the unified feature module; update `ARCHITECTURE.md`.
 - **One product name everywhere** — DECIDED 2026-07-03: **Perchance**. Swept across README, CONTRIBUTING, docs/, frontend components, page title, and asset filenames.
 
