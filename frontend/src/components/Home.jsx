@@ -14,6 +14,14 @@ function HeroTypewriter() {
 
     // Initial kick-off
     useEffect(() => {
+        // Reduced motion: skip the typewriter entirely and show the finished hero.
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+            setN1(TEXT1.length);
+            setN2(TEXT2.length);
+            setIndentActive(true);
+            setPhase('done');
+            return undefined;
+        }
         const t = setTimeout(() => setPhase('l1'), 400);
         return () => clearTimeout(t);
     }, []);
@@ -81,7 +89,7 @@ export default function Home() {
                 <FadeIn direction="none">
                     <section className="mt-8 mb-16 w-full max-w-4xl mx-auto">
                         <p className="text-xs font-semibold tracking-widest uppercase text-muted-foreground mb-6">
-                            perChance · 2025–26 Season
+                            Perchance · 2025–26 Season
                         </p>
                         <HeroTypewriter />
                         <p className="text-lg text-muted-foreground max-w-md leading-relaxed mt-8">

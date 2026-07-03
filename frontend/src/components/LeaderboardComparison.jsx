@@ -60,7 +60,8 @@ function TierChangedBadge({ s1tier, s2tier }) {
 function DeltaCell({ delta }) {
     if (delta == null) return <span className="text-muted-foreground">—</span>;
     if (delta > 0) return <span className="text-green-400 font-semibold">↑ +{delta.toFixed(1)}</span>;
-    return <span className="text-red-400 font-semibold">↓ {delta.toFixed(1)}</span>;
+    if (delta < 0) return <span className="text-red-400 font-semibold">↓ {delta.toFixed(1)}</span>;
+    return <span className="text-muted-foreground font-semibold">0.0</span>;
 }
 
 function SideBySideRow({ player, seasons }) {
@@ -72,9 +73,9 @@ function SideBySideRow({ player, seasons }) {
     const s2Available = d2?.available;
 
     return (
-        <div className="flex items-center gap-4 px-5 py-4 bg-card border border-border rounded-xl hover:border-border/80 transition-colors">
-            {/* Player name */}
-            <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 sm:gap-x-4 gap-y-2 px-4 sm:px-5 py-4 bg-card border border-border rounded-xl hover:border-border/80 transition-colors">
+            {/* Player name — full row on mobile, first column on ≥sm */}
+            <div className="w-full sm:w-auto sm:flex-1 min-w-0">
                 <p className="font-semibold text-foreground truncate">{player.player_name}</p>
                 {s2Available && (
                     <p className="text-xs text-muted-foreground">{d2.total_games} games (2025-26)</p>
@@ -108,7 +109,7 @@ function SideBySideRow({ player, seasons }) {
             </div>
 
             {/* Delta + tier badge */}
-            <div className="w-28 flex-shrink-0 flex items-center justify-center">
+            <div className="w-20 sm:w-28 flex-shrink-0 flex items-center justify-center">
                 <DeltaCell delta={player.score_delta} />
                 {player.tier_changed && s1Available && s2Available && (
                     <TierChangedBadge
@@ -146,9 +147,9 @@ function DeltaBar({ player, seasons, maxAbsDelta }) {
     const isPositive = delta != null && delta > 0;
 
     return (
-        <div className="flex items-center gap-4 px-5 py-4 bg-card border border-border rounded-xl transition-colors">
-            {/* Player name */}
-            <div className="w-36 flex-shrink-0 min-w-0">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 sm:gap-x-4 gap-y-2 px-4 sm:px-5 py-4 bg-card border border-border rounded-xl transition-colors">
+            {/* Player name — full row on mobile, first column on ≥sm */}
+            <div className="w-full sm:w-36 flex-shrink-0 min-w-0">
                 <p className="font-semibold text-foreground truncate text-sm">{player.player_name}</p>
             </div>
 
@@ -178,12 +179,12 @@ function DeltaBar({ player, seasons, maxAbsDelta }) {
             </div>
 
             {/* Delta number */}
-            <div className="w-20 flex-shrink-0 text-right">
+            <div className="w-14 sm:w-20 flex-shrink-0 text-right">
                 <DeltaCell delta={delta} />
             </div>
 
             {/* Tier badge */}
-            <div className="w-16 flex-shrink-0">
+            <div className="w-16 flex-shrink-0 hidden sm:block">
                 {player.tier_changed && s1Available && s2Available && (
                     <TierChangedBadge s1tier={s1Tier} s2tier={s2Tier} />
                 )}
@@ -224,8 +225,14 @@ const LeaderboardComparison = () => {
     const players = data?.players ?? [];
     const seasons = data?.seasons ?? [];
 
+    // API labels seasons as '2024-25' but keys each player's per-season data
+    // by the season END year ('2025'). Derive the key from the label.
+    const seasonEndKey = (label) => {
+        const [start, end] = String(label).split('-');
+        return end && end.length === 2 ? `${start.slice(0, 2)}${end}` : String(label);
+    };
     const [s1key, s2key] = seasons.length >= 2
-        ? [seasons[0].replace('20', '').replace('-', ''), seasons[1].replace('20', '').replace('-', '')]
+        ? [seasonEndKey(seasons[0]), seasonEndKey(seasons[1])]
         : ['2025', '2026'];
 
     const sortedPlayers = view === 'delta'
@@ -353,7 +360,7 @@ const LeaderboardComparison = () => {
 
             {/* Side-by-side column headers */}
             {!loading && !error && players.length > 0 && view === 'sidebyside' && (
-                <div className="flex items-center gap-4 px-5 mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+                <div className="hidden sm:flex items-center gap-4 px-5 mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
                     <div className="flex-1">Player</div>
                     <div className="w-24 text-center">2024-25</div>
                     <div className="w-24 text-center">2025-26</div>
@@ -364,7 +371,7 @@ const LeaderboardComparison = () => {
 
             {/* Delta view column headers */}
             {!loading && !error && players.length > 0 && view === 'delta' && (
-                <div className="flex items-center gap-4 px-5 mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+                <div className="hidden sm:flex items-center gap-4 px-5 mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
                     <div className="w-36">Player</div>
                     <div className="w-10">24-25</div>
                     <div className="flex-1 text-center">Change</div>

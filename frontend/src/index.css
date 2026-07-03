@@ -96,6 +96,21 @@
 .hero-cursor        { opacity: 0.6; }
 .hero-cursor-blink  { animation: hero-blink 1s step-start infinite; }
 
+/* Respect reduced-motion: freeze decorative animation, keep content visible */
+@media (prefers-reduced-motion: reduce) {
+  .hero-cursor-blink,
+  .text-type__cursor,
+  .animate-expand {
+    animation: none !important;
+  }
+  .animate-expand { width: 100%; }
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 /* Utility animations */
 @keyframes expand {
   0%   { width: 0; }

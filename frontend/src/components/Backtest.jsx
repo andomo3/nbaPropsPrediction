@@ -9,7 +9,7 @@ import {
     ReferenceLine,
     ResponsiveContainer,
 } from 'recharts';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Info } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -28,6 +28,76 @@ const STAT_OPTIONS = [
     { value: 'reb', label: 'Rebounds' },
     { value: 'ast', label: 'Assists' },
 ];
+
+const REGIME_META = {
+    'out-of-sample': {
+        label: 'Out-of-sample',
+        className: 'bg-green-500/15 text-green-400 border-green-500/30',
+    },
+    'selection-overlap': {
+        label: 'Selection overlap',
+        className: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    },
+    'training-overlap': {
+        label: 'Training overlap',
+        className: 'bg-red-500/15 text-red-400 border-red-500/30',
+    },
+    unknown: {
+        label: 'Unknown',
+        className: 'bg-secondary text-muted-foreground border-border',
+    },
+};
+
+const REGIME_DEFINITIONS = [
+    {
+        key: 'out-of-sample',
+        text: 'Window falls entirely in the model’s held-out test period — the model never saw these games. The most trustworthy read.',
+    },
+    {
+        key: 'selection-overlap',
+        text: 'Window overlaps the early-stopping validation window used to tune the model, so results may look slightly better than on truly unseen games.',
+    },
+    {
+        key: 'training-overlap',
+        text: 'Window overlaps the model’s fit window — it saw some of these games during training, so results are optimistic.',
+    },
+];
+
+function SampleRegimeBadge({ regime }) {
+    const meta = REGIME_META[regime] ?? REGIME_META.unknown;
+    return (
+        <div className="relative group inline-flex">
+            <button
+                type="button"
+                aria-label={`Sample regime: ${meta.label}. Hover or focus for definitions.`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium cursor-help ${meta.className}`}
+            >
+                <span className="uppercase tracking-wider text-[10px] opacity-70">Sample regime</span>
+                {meta.label}
+                <Info className="h-3 w-3 opacity-70" aria-hidden="true" />
+            </button>
+            <div
+                role="tooltip"
+                className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-50 hidden group-hover:block group-focus-within:block w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-popover p-3 shadow-lg space-y-2"
+            >
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+                    How this backtest window relates to model training
+                </p>
+                {REGIME_DEFINITIONS.map(({ key, text }) => (
+                    <p
+                        key={key}
+                        className={`text-xs leading-relaxed ${
+                            key === regime ? 'text-foreground' : 'text-muted-foreground'
+                        }`}
+                    >
+                        <strong className="font-semibold">{REGIME_META[key].label}</strong>
+                        {key === regime && ' (this run)'} — {text}
+                    </p>
+                ))}
+            </div>
+        </div>
+    );
+}
 
 function StatCard({ label, value, highlight }) {
     return (
@@ -138,7 +208,7 @@ const Backtest = () => {
                 <div className="grid gap-5 md:grid-cols-2">
                     <div className="space-y-2 relative">
                         <Label className="text-xs uppercase tracking-wider font-semibold text-primary">
-                            player_name
+                            player
                         </Label>
                         <Input
                             value={playerQuery}
@@ -198,7 +268,7 @@ const Backtest = () => {
 
                     <div className="space-y-2">
                         <Label className="text-xs uppercase tracking-wider font-semibold text-primary">
-                            date_from
+                            from
                         </Label>
                         <Input
                             type="date"
@@ -210,7 +280,7 @@ const Backtest = () => {
 
                     <div className="space-y-2">
                         <Label className="text-xs uppercase tracking-wider font-semibold text-primary">
-                            date_to
+                            to
                         </Label>
                         <Input
                             type="date"
@@ -238,6 +308,13 @@ const Backtest = () => {
 
             {result && (
                 <div className="space-y-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <h2 className="text-sm uppercase tracking-wider font-semibold text-muted-foreground">
+                            Backtest Results
+                        </h2>
+                        {result.sample_regime && <SampleRegimeBadge regime={result.sample_regime} />}
+                    </div>
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <StatCard label="Total Bets" value={agg.total_bets} />
                         <StatCard label="Win Rate" value={`${(agg.accuracy * 100).toFixed(1)}%`} />
@@ -298,11 +375,11 @@ const Backtest = () => {
                                     Game-by-Game Results
                                 </p>
                             </div>
-                            <div className="overflow-y-auto max-h-96">
-                                <table className="w-full text-sm">
+                            <div className="overflow-auto max-h-96">
+                                <table className="w-full min-w-[520px] text-sm">
                                     <thead className="sticky top-0 bg-card border-b border-border">
                                         <tr>
-                                            {['Date', 'Opp', 'Actual', 'Line', 'Proj', '', 'P&L'].map((h) => (
+                                            {['Date', 'Opp', 'Actual', 'Line', 'Proj', 'Hit', 'P&L'].map((h) => (
                                                 <th
                                                     key={h}
                                                     className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground"

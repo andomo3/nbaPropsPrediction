@@ -2,8 +2,8 @@
 management/commands/seed_season_backtest.py
 
 Pre-seeds BacktestRun / BacktestResult rows for the Season Report Card
-feature by running backtests for 10 canonical players × 3 stats over a
-full NBA season.
+feature by running backtests for the SEASON_REPORT_PLAYERS roster
+(constants.py) × 3 stats × all comparison models over a full NBA season.
 
 Runs once (or whenever --force is passed to refresh stale data). Results
 are cached in the DB so the Season Report Card API endpoint is instant.
@@ -40,7 +40,7 @@ STATS = ["pts", "reb", "ast"]
 
 class Command(BaseCommand):
     help = (
-        "Seed season backtest results for 10 canonical players "
+        "Seed season backtest results for the SEASON_REPORT_PLAYERS roster "
         "to power the Season Report Card feature."
     )
 

@@ -33,6 +33,13 @@ const TextType = ({
 
     const textArray = useMemo(() => (Array.isArray(text) ? text : [text]), [text]);
 
+    const prefersReducedMotion = useMemo(
+        () =>
+            typeof window !== 'undefined' &&
+            window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+        []
+    );
+
     const getRandomSpeed = useCallback(() => {
         if (!variableSpeed) return typingSpeed;
         const { min, max } = variableSpeed;
@@ -65,6 +72,7 @@ const TextType = ({
     useEffect(() => {
         if (showCursor && cursorRef.current) {
             gsap.set(cursorRef.current, { opacity: 1 });
+            if (prefersReducedMotion) return; // static cursor, no blink
             gsap.to(cursorRef.current, {
                 opacity: 0,
                 duration: cursorBlinkDuration,
@@ -77,6 +85,12 @@ const TextType = ({
 
     useEffect(() => {
         if (!isVisible) return;
+
+        // Reduced motion: render the first text in full, skip the typewriter loop.
+        if (prefersReducedMotion) {
+            setDisplayedText(textArray[currentTextIndex] || '');
+            return;
+        }
 
         let timeout;
         const currentText = textArray[currentTextIndex] || '';
