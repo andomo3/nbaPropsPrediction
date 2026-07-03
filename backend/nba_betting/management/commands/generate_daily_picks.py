@@ -15,11 +15,12 @@ from __future__ import annotations
 from datetime import date
 
 from django.core.management.base import BaseCommand
-from scipy.stats import norm
 
+from nba_betting.constants import STD_DEFAULTS
 from nba_betting.ml.predictor import ModelPredictor
 from nba_betting.models import DailyPick, Game, Player
 from nba_betting.services.features import _find_player, get_model_inputs
+from nba_betting.services.probability import calculate_probability
 from nba_betting.utils.dates import et_today
 
 # ------------------------------------------------------------------
@@ -135,11 +136,11 @@ class Command(BaseCommand):
                     std_dev = (
                         float(feature_row[std_col].iloc[0])
                         if std_col in feature_row.columns
-                        else {"pts": 6.1, "reb": 2.6, "ast": 1.8}[stat]
+                        else STD_DEFAULTS[stat]
                     )
-                    prob_over = float(max(0.01, min(0.99,
-                        1 - norm.cdf((line - projection) / max(std_dev, 0.5))
-                    )))
+                    prob_over = calculate_probability(
+                        stat, float(projection), line, std_dev
+                    )
                     edge = "Over" if projection > line else "Under"
 
                     if not dry_run:

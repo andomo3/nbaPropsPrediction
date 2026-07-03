@@ -1,3 +1,5 @@
+> **ARCHIVED (2026-07-03):** this document describes a superseded design and is kept for historical reference only. It planned a quarter-level (per-period) props predictor with a Next.js frontend; the shipped system is a full-game, per-stat regression platform — see `docs/ARCHITECTURE.md`.
+
 # Implementation Plan
 
 This plan expands the initial prompt into a step-by-step guide for building a

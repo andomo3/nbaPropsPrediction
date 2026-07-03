@@ -79,8 +79,11 @@ def compute_floor_ceiling(player_name, stat, season=DEFAULT_SEASON):
         ("Hot form (L5>avg)", [e for e in enriched if e["form_delta"] >= form_threshold]),
         ("Cold form (L5<avg)",[e for e in enriched if e["form_delta"] <= -form_threshold]),
     ]
+    # p10/p90 from tiny subsets are noise, not player traits — require a
+    # sample large enough for the extreme quantiles to mean something.
+    MIN_SPLIT_N = 15
     for label, grp in groups:
-        if len(grp) >= 5:
+        if len(grp) >= MIN_SPLIT_N:
             vals = sorted(g["r"].actual for g in grp)
             gn = len(vals)
             condition_splits.append({
@@ -101,7 +104,7 @@ def compute_floor_ceiling(player_name, stat, season=DEFAULT_SEASON):
             my_rank = i + 1
             break
 
-    insight = _insight(player_name, stat, floor, ceiling, mean, boom_bust, archetype,
+    insight = _insight(player_name, stat, floor, ceiling, p50, boom_bust, archetype,
                        condition_splits, my_rank, len(roster_scores))
 
     return {
@@ -185,19 +188,19 @@ def _roster_boom_bust(stat, season, date_from, date_to):
     return rows
 
 
-def _insight(player_name, stat, floor, ceiling, mean, boom_bust, archetype,
+def _insight(player_name, stat, floor, ceiling, median, boom_bust, archetype,
              condition_splits, my_rank, roster_size):
     s = {"pts": "points", "reb": "rebounds", "ast": "assists"}.get(stat, stat)
     parts = [
         f"**{archetype}.** {player_name}'s {s} range from a floor of {floor} (p10) "
-        f"to a ceiling of {ceiling} (p90), with a median of {mean}."
+        f"to a ceiling of {ceiling} (p90), with a median of {median}."
     ]
 
     if boom_bust is not None:
         if boom_bust >= 1.8:
             parts.append(
-                f"A boom-bust ratio of {boom_bust:.2f} makes lines around the median "
-                f"unreliable — the tails are where the value lies."
+                f"A boom-bust ratio of {boom_bust:.2f} means single-game outcomes "
+                f"spread far around the median — treat any median-based line with caution."
             )
         elif boom_bust < 1.2:
             parts.append(
@@ -214,9 +217,11 @@ def _insight(player_name, stat, floor, ceiling, mean, boom_bust, archetype,
     hot    = next((c for c in condition_splits if "Hot" in c["label"]), None)
     if rested and hot:
         if hot["ceiling"] > rested["ceiling"] * 1.1:
+            # Descriptive only: these are overlapping small subsets of one
+            # season, so no causal/predictive claim is warranted.
             parts.append(
-                f"Ceiling jumps to {hot['ceiling']} when in hot form vs {rested['ceiling']} rested — "
-                "form is the better ceiling predictor than rest."
+                f"In this season's sample, the observed ceiling was higher in hot-form games "
+                f"({hot['ceiling']}) than in rested games ({rested['ceiling']})."
             )
 
     return " ".join(parts)

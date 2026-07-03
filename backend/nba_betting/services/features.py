@@ -11,8 +11,19 @@ import numpy as np
 import pandas as pd
 from django.db.models import Q
 
+from nba_betting.constants import STD_DEFAULTS
 from nba_betting.ml.train_regression import FEATURE_COLUMNS
 from nba_betting.models import Player, PlayerStats
+
+
+def _num_or(value, default: float) -> float:
+    """float(value) unless it's None/NaN — preserves legitimate zeros,
+    which an `or`-style fallback would silently replace."""
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    return float(default) if np.isnan(f) else f
 
 
 def get_model_inputs(player_name: str, opponent: str, stat: str, is_home: bool = True):
@@ -70,14 +81,17 @@ def get_model_inputs(player_name: str, opponent: str, stat: str, is_home: bool =
     hot_cold_ast = _hot_cold(float(latest["ast_L5"]), season_avg_ast)
 
     # ── Std L10 (pts_std used for probability derivation in views.py) ─────────
-    pts_std  = float(latest.get("pts_std_L10")  or 5.0)
-    reb_std  = float(latest.get("reb_std_L10")  or 2.0)
-    ast_std  = float(latest.get("ast_std_L10")  or 1.5)
+    # NaN-safe: a short history yields NaN std (rolling min_periods=5), and
+    # float(NaN) is truthy — an `or` fallback would pass NaN straight into the
+    # probability CDF and produce a clamped prob_over of 0.99.
+    pts_std  = _num_or(latest.get("pts_std_L10"), STD_DEFAULTS["pts"])
+    reb_std  = _num_or(latest.get("reb_std_L10"), STD_DEFAULTS["reb"])
+    ast_std  = _num_or(latest.get("ast_std_L10"), STD_DEFAULTS["ast"])
 
     # ── Assemble full feature pool ────────────────────────────────────────────
     all_features = {
         "is_home":             1.0 if is_home else 0.0,
-        "days_rest":           float(latest.get("days_rest") or 2),
+        "days_rest":           _num_or(latest.get("days_rest"), 3.0),
         # pts features
         "pts_L5":              float(latest["pts_L5"]),
         "pts_L10":             float(latest["pts_L10"]),
@@ -105,8 +119,8 @@ def get_model_inputs(player_name: str, opponent: str, stat: str, is_home: bool =
         # shared
         "min_L5":              float(latest["min_L5"]),
         "min_L10":             float(latest["min_L10"]),
-        "fg_pct_L5":           float(latest.get("fg_pct_L5") or 0.45),
-        "fg_pct_L10":          float(latest.get("fg_pct_L10") or 0.45),
+        "fg_pct_L5":           _num_or(latest.get("fg_pct_L5"), 0.45),
+        "fg_pct_L10":          _num_or(latest.get("fg_pct_L10"), 0.45),
     }
 
     # Select only the columns for this stat's model
@@ -118,19 +132,18 @@ def get_model_inputs(player_name: str, opponent: str, stat: str, is_home: bool =
 
 def get_std_for_stat(player_name: str, stat: str) -> float:
     """Return the player's rolling 10-game std dev for the given stat (for probability derivation)."""
-    _std_defaults = {"pts": 5.0, "reb": 2.0, "ast": 1.5}
     player = _find_player(player_name)
     if not player:
-        return _std_defaults.get(stat, 3.0)
+        return STD_DEFAULTS.get(stat, 3.0)
 
     history_df = _load_player_history(player)
     if history_df.empty:
-        return _std_defaults.get(stat, 3.0)
+        return STD_DEFAULTS.get(stat, 3.0)
 
     history_df = _add_rolling_features(history_df)
     history_df = history_df.dropna(subset=[f"{stat}_std_L10"])
     if history_df.empty:
-        return _std_defaults.get(stat, 3.0)
+        return STD_DEFAULTS.get(stat, 3.0)
 
     return float(history_df.iloc[-1][f"{stat}_std_L10"])
 
@@ -188,7 +201,10 @@ def _load_player_history(player: Player) -> pd.DataFrame:
     df = df.sort_values(["player_name", "date"]).reset_index(drop=True)
     df["is_home"] = (df["player_team"] == df["home_team"]).astype(int)
     df["opponent"] = np.where(df["is_home"] == 1, df["away_team"], df["home_team"])
-    df["days_rest"] = df.groupby("player_name")["date"].diff().dt.days.fillna(3)
+    # fillna(3) + clip(10) mirrors training (ml/train_regression.py days_rest)
+    df["days_rest"] = (
+        df.groupby("player_name")["date"].diff().dt.days.fillna(3).clip(upper=10)
+    )
     return df
 
 

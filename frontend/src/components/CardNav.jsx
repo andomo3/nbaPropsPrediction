@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './CardNav.css';
-import logo from '../assets/perchave_final.png';
+import logo from '../assets/perchance_final.png';
 
 const NAV_LINKS = [
     { label: 'Leaderboard', href: '/leaderboard' },
     { label: 'Intelligence', href: '/intelligence' },
 ];
 
-const CardNav = ({ logoText = 'perChance' }) => {
+const CardNav = ({ logoText = 'Perchance' }) => {
     const [open, setOpen] = useState(false);
     const location = useLocation();
 
