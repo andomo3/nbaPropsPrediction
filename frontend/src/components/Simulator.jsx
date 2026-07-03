@@ -287,12 +287,12 @@ const Simulator = () => {
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
                                 <XAxis
                                     dataKey="gameNum"
-                                    tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }}
+                                    tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
                                     interval={tickInterval}
-                                    label={{ value: 'Game #', position: 'insideBottomRight', offset: -4, fontSize: 11, fill: 'var(--color-muted-foreground)' }}
+                                    label={{ value: 'Game #', position: 'insideBottomRight', offset: -4, fontSize: 11, fill: 'var(--muted-foreground)' }}
                                 />
                                 <YAxis
-                                    tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }}
+                                    tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
                                     width={32}
                                     domain={['auto', 'auto']}
                                 />
@@ -374,9 +374,9 @@ const Simulator = () => {
                                 <Line
                                     type="monotone"
                                     dataKey="actual"
-                                    stroke="var(--color-primary)"
+                                    stroke="var(--primary)"
                                     strokeWidth={1.5}
-                                    dot={{ r: 2.5, fill: 'var(--color-primary)', strokeWidth: 0 }}
+                                    dot={{ r: 2.5, fill: 'var(--primary)', strokeWidth: 0 }}
                                     activeDot={{ r: 5 }}
                                     legendType="none"
                                     isAnimationActive={false}

@@ -2,9 +2,16 @@
 
 > **Understand players, not just lines.**
 
+[![CI](https://github.com/andomo3/nbaPropsPrediction/actions/workflows/ci.yml/badge.svg)](https://github.com/andomo3/nbaPropsPrediction/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Perchance is an open-source analytics platform that goes beyond win/loss prediction. It answers the question serious bettors and basketball analysts actually care about: *under what conditions does a player become predictable — or unpredictable — and why?*
 
 Instead of chasing projections, the platform builds a full behavioral profile for each player: where the model has edge and where it doesn't, how performance shifts by rest, form, and matchup, and what the realistic floor and ceiling look like on any given night. The goal is insight, not a bet slip.
+
+**Honesty first.** Every metric this platform reports is measured against *synthetic* baselines (a player's own rolling average), not sportsbook lines, and the full list of assumptions and limitations is first-class documentation, not fine print. Before citing any number, read [docs/METHODOLOGY.md](docs/METHODOLOGY.md). The methodology was adversarially audited before release ([docs/audit/](docs/audit/)), and the leakage guarantees are enforced by CI tests. A runnable, small-scale walkthrough of the entire methodology — including a demonstration of how data leakage inflates results — lives in [notebooks/methodology_walkthrough.ipynb](notebooks/methodology_walkthrough.ipynb).
+
+> ⚠️ **This is an analytics research project, not betting advice.** Backtested results against self-generated baselines do not imply profitability against real sportsbooks. If you gamble, do so legally and responsibly.
 
 ---
 
@@ -135,14 +142,21 @@ nbaPropsPrediction/
 ├── backend/
 │   └── nba_betting/
 │       ├── models.py               # ORM: BacktestRun, BacktestResult, ...
-│       ├── views.py                # API views
+│       ├── views/                  # API views (predictions, picks, backtests, intelligence)
 │       ├── urls.py
+│       ├── ml/                     # Training pipeline + model serving
+│       │   ├── train_regression.py # Feature engineering, chronological splits, training
+│       │   └── predictor.py
 │       ├── services/               # Business logic
+│       │   ├── backtest.py         # Season simulation engine
+│       │   ├── probability.py      # Single prob_over implementation
+│       │   ├── statistical_validation.py
 │       │   ├── edge_calibration.py
 │       │   ├── floor_ceiling.py
 │       │   ├── opponent_analysis.py
 │       │   ├── player_fingerprint.py
 │       │   └── variance_decomp.py
+│       ├── tests/                  # Leakage, parity, probability, validation tests
 │       ├── utils/
 │       │   └── stats.py            # Shared predictability scoring
 │       └── management/commands/    # CLI data pipeline commands
@@ -154,6 +168,9 @@ nbaPropsPrediction/
 │       └── utils/
 │           ├── constants.js        # API base, player list, stats
 │           └── format.js           # Number/color formatters
+├── docs/                           # ARCHITECTURE, METHODOLOGY, API docs, audit reports
+├── notebooks/                      # methodology_walkthrough.ipynb
+├── research/                       # Walk-forward eval, betting sim, SHAP, paper
 ├── dags/                           # Airflow DAGs
 ├── docker-compose.yml
 ├── Dockerfile
@@ -195,6 +212,16 @@ Tiers: **High** ≥ 65 · **Moderate** ≥ 40 · **Low** < 40
 The canonical implementation lives in [`backend/nba_betting/utils/stats.py`](backend/nba_betting/utils/stats.py).
 
 ---
+
+## Documentation
+
+| Doc | What it covers |
+|---|---|
+| [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | Models, features, splits, validation tests, and the full assumptions & limitations list |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, data flow, ML pipeline, API reference |
+| [docs/ML_FEATURE_GUIDE.md](docs/ML_FEATURE_GUIDE.md) | Every model feature with its exact formula |
+| [notebooks/methodology_walkthrough.ipynb](notebooks/methodology_walkthrough.ipynb) | Runnable small-scale walkthrough, including the leakage demonstration |
+| [docs/audit/](docs/audit/) | The pre-release adversarial methodology audit and remediation log |
 
 ## Contributing
 

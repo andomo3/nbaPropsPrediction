@@ -22,13 +22,26 @@ function EdgeBandTooltip({ active, payload }) {
     );
 }
 
+const SPLIT_COLS = 'grid grid-cols-[1fr_auto_3.2rem_3.5rem] items-center gap-2';
+
+function SplitHeader() {
+    return (
+        <div className={`${SPLIT_COLS} text-[10px] uppercase tracking-wider text-muted-foreground px-3 pb-1`}>
+            <span />
+            <span>games</span>
+            <span className="text-right">hit rate</span>
+            <span className="text-right">ROI</span>
+        </div>
+    );
+}
+
 function SplitRow({ r }) {
     return (
-        <div className="flex items-center justify-between text-xs px-3 py-1.5 rounded-lg bg-background/60">
+        <div className={`${SPLIT_COLS} text-xs px-3 py-1.5 rounded-lg bg-background/60`}>
             <span className="text-foreground">{r.label}</span>
-            <span className="text-muted-foreground mr-2">n={r.n}</span>
-            <span style={{ color: hitColor(r.hit_rate) }}>{pct(r.hit_rate)}</span>
-            <span className="ml-2" style={{ color: roiColor(r.roi) }}>{fmt(r.roi, 1)}%</span>
+            <span className="text-muted-foreground">n={r.n}</span>
+            <span className="text-right" style={{ color: hitColor(r.hit_rate) }}>{pct(r.hit_rate)}</span>
+            <span className="text-right" style={{ color: roiColor(r.roi) }}>{fmt(r.roi, 1)}%</span>
         </div>
     );
 }
@@ -61,7 +74,7 @@ export default function EdgeCalibration({ data, loading, error, collapsible = fa
                 <div className="mb-6">
                     <p className="text-xs text-muted-foreground mb-2">Hit rate by projected edge bucket</p>
                     <ResponsiveContainer width="100%" height={220}>
-                        <BarChart data={edge_bands} margin={{ top: 16, right: 16, left: 0, bottom: 0 }}>
+                        <BarChart data={edge_bands} margin={{ top: 16, right: 44, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
                             <XAxis dataKey="bucket" tick={{ fontSize: 11, fill: C.slate }} />
                             <YAxis tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} tick={{ fontSize: 11, fill: C.slate }} />
@@ -79,16 +92,18 @@ export default function EdgeCalibration({ data, loading, error, collapsible = fa
                 </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 {rest_analysis.length > 0 && (
                     <div>
                         <p className="text-xs font-semibold text-muted-foreground mb-2">Rest splits</p>
+                        <SplitHeader />
                         <div className="space-y-1">{rest_analysis.map((r, i) => <SplitRow key={i} r={r} />)}</div>
                     </div>
                 )}
                 {form_analysis.length > 0 && (
                     <div>
                         <p className="text-xs font-semibold text-muted-foreground mb-2">Form splits</p>
+                        <SplitHeader />
                         <div className="space-y-1">{form_analysis.map((r, i) => <SplitRow key={i} r={r} />)}</div>
                     </div>
                 )}

@@ -8,7 +8,7 @@ const NAV_LINKS = [
     { label: 'Intelligence', href: '/intelligence' },
 ];
 
-const CardNav = ({ logoText = 'perChance' }) => {
+const CardNav = ({ logoText = 'Perchance' }) => {
     const [open, setOpen] = useState(false);
     const location = useLocation();
 
