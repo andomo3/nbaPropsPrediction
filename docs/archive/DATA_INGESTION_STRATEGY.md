@@ -1,3 +1,5 @@
+> **ARCHIVED (2026-07-03):** this document describes a superseded design and is kept for historical reference only. Quarter-slice ingestion via `BoxScoreTraditionalV3` is no longer used; the live system ingests full-game box scores from the ESPN unofficial API (`sync_espn_games`) — see `docs/ARCHITECTURE.md`.
+
 ## Data Ingestion Strategy
 1. NBA stats
    - Use `BoxScoreTraditionalV3` with StartPeriod/EndPeriod for quarter slices.

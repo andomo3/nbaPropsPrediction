@@ -19,6 +19,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from django.db.models import Count, Max
 
 from nba_betting.ml.predictor import ModelPredictor
 from nba_betting.ml.train_regression import FEATURE_COLUMNS
@@ -87,7 +88,9 @@ def run_backtest(
 
     full_df = _add_rolling_features(full_df)
     full_df = _add_season_features(full_df)
-    full_df = full_df[full_df["min"] > 0].reset_index(drop=True)
+    # Score only games the model was trained to predict (>= 10 minutes,
+    # matching MIN_MINUTES target eligibility in ml/train_regression.py)
+    full_df = full_df[full_df["min"] >= 10].reset_index(drop=True)
 
     # Drop rows that are still NaN in the stat-specific features we need
     required_cols = FEATURE_COLUMNS[stat]
@@ -123,6 +126,11 @@ def run_backtest(
         actual    = float(row[stat])
         line      = float(row[f"{stat}_L5"])   # rolling avg as the backtest line
 
+        # Push (actual exactly on the line): a sportsbook voids the bet, so
+        # scoring it as a decided outcome would distort the hit rate.
+        if actual == line:
+            continue
+
         # Opponent defense lookup
         opp_pts = opp_defense.get(("pts", opponent, game_date), opp_defaults["pts"])
         opp_reb = opp_defense.get(("reb", opponent, game_date), opp_defaults["reb"])
@@ -136,7 +144,7 @@ def run_backtest(
         # Build the full feature pool for this row
         feature_pool = {
             "is_home":             float(row["is_home"]),
-            "days_rest":           _safe("days_rest", 2.0),
+            "days_rest":           _safe("days_rest", 3.0),
             "pts_L5":              _safe("pts_L5", 0.0),
             "pts_L10":             _safe("pts_L10", 0.0),
             "pts_ema_L5":          _safe("pts_ema_L5", 0.0),
@@ -302,14 +310,27 @@ def _add_season_features(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── Opponent defense batch ────────────────────────────────────────────────────
 
+_OPP_DEFENSE_CACHE: dict[str, Any] = {"key": None, "value": {}}
+
+
 def _batch_opponent_defense() -> dict[tuple[str, str, date], float]:
     """
     Pre-compute a lookup dict:
         {("pts"|"reb"|"ast", opponent_abbr, game_date): rolling_allowed}
 
     Fetches all PlayerStats in one query, avoids N+1 in the prediction loop.
+    Memoized on (row count, latest game date) so repeated backtests — e.g.
+    the season seeder's hundreds of runs — rebuild it only when new games
+    have been synced.
     """
     try:
+        agg = PlayerStats.objects.filter(period=0).aggregate(
+            n=Count("id"), latest=Max("game__date")
+        )
+        cache_key = (agg["n"], str(agg["latest"]))
+        if _OPP_DEFENSE_CACHE["key"] == cache_key:
+            return _OPP_DEFENSE_CACHE["value"]
+
         qs = (
             PlayerStats.objects.filter(period=0)
             .select_related("game", "game__home_team", "game__away_team", "team")
@@ -366,6 +387,8 @@ def _batch_opponent_defense() -> dict[tuple[str, str, date], float]:
                 val = row[f"{stat}_l10"]
                 result[(stat, opp, gd)] = float(val) if not pd.isna(val) else defaults[stat]
 
+        _OPP_DEFENSE_CACHE["key"] = cache_key
+        _OPP_DEFENSE_CACHE["value"] = result
         return result
 
     except Exception:

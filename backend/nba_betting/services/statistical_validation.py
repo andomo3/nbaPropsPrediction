@@ -23,14 +23,43 @@ Returns a dict ready for JSON serialisation.
 
 from __future__ import annotations
 
+import math
+
 from scipy.stats import binomtest, spearmanr, ttest_1samp
 
 from ..models import BacktestRun
-from ..constants import DEFAULT_SEASON, SEASON_DATES
+from ..constants import DEFAULT_SEASON, SEASON_DATES, SEASON_REPORT_PLAYERS
 
-BREAK_EVEN = 0.524
+BREAK_EVEN = 0.524    # -110 two-way pricing break-even (see DISCLOSURES)
 MIN_N_RELIABLE = 30   # below this, flag results as low-confidence
 MIN_N_EDGE     = 15   # minimum for edge correlation to be meaningful
+
+# Standing methodological caveats attached to every payload. These are not
+# per-sample warnings — they hold for the whole analysis design.
+DISCLOSURES = [
+    (
+        "The backtest line is the player's own L5 rolling average, not a "
+        "sportsbook line. Beating the 52.4% (-110) break-even against this "
+        "synthetic line does not by itself imply profitability against real "
+        "books."
+    ),
+    (
+        f"This panel is one of ~{len(SEASON_REPORT_PLAYERS) * 3} uncorrected "
+        "player-stat tests; at α=0.05, a few significant results are "
+        "expected by chance alone. Treat each verdict as descriptive of this "
+        "player-stat panel, not as portfolio-level evidence."
+    ),
+    (
+        "Tests treat a player's games as independent draws; streaks, "
+        "schedule effects, and lineup changes introduce serial dependence "
+        "that nominal p-values do not account for."
+    ),
+    (
+        "Players were hand-selected for durability and consistency, so "
+        "results describe this roster only and do not generalize to the "
+        "league."
+    ),
+]
 
 
 def compute_statistical_validation(
@@ -73,11 +102,20 @@ def compute_statistical_validation(
     hr_sig  = hr_pval < 0.05
 
     # ── 2. Edge–hit correlation ───────────────────────────────────────────────
+    # One-sided test to match the directional claim ("larger edge → more
+    # hits") — a two-sided p-value gated by rho > 0 would be inconsistent
+    # with the one-sided binomial test above.
     if n >= MIN_N_EDGE:
-        rho, edge_pval = spearmanr(edges, corrects)
+        rho, edge_pval = spearmanr(edges, corrects, alternative="greater")
         rho       = float(rho)
         edge_pval = float(edge_pval)
-        edge_sig  = edge_pval < 0.05 and rho > 0
+        if math.isnan(rho) or math.isnan(edge_pval):
+            # Degenerate sample (e.g. every prediction correct) — the
+            # correlation is undefined, not zero.
+            rho = edge_pval = None
+            edge_sig = False
+        else:
+            edge_sig = edge_pval < 0.05
     else:
         rho = edge_pval = None
         edge_sig = False
@@ -86,6 +124,8 @@ def compute_statistical_validation(
     tstat, bias_pval = ttest_1samp(errors, popmean=0.0)
     mean_error = sum(errors) / n if n else 0.0
     bias_pval  = float(bias_pval)
+    if math.isnan(bias_pval):
+        bias_pval = 1.0   # constant/singleton errors: no evidence either way
     bias_sig   = bias_pval < 0.05   # significantly non-zero → systematic bias
 
     # Direction: positive = model under-projects, negative = over-projects
@@ -143,9 +183,13 @@ def compute_statistical_validation(
             "p_value":       round(bias_pval, 4),
             "significant":   bias_sig,
             "direction":     bias_direction,
+            # Absence of evidence is not evidence of absence: a
+            # non-significant test only means no bias was DETECTED, and at
+            # small n the test has little power to detect one.
             "label":         (
                 f"Significant bias ({bias_direction})" if bias_sig
-                else "Well-calibrated"
+                else "No detectable bias" if n >= MIN_N_RELIABLE
+                else "No detectable bias (low power)"
             ),
         },
         "sample_adequacy": {
@@ -153,6 +197,7 @@ def compute_statistical_validation(
             "adequate": n >= MIN_N_RELIABLE,
             "warnings": warnings,
         },
+        "disclosures": DISCLOSURES,
         "insight": insight,
     }
 
@@ -218,7 +263,8 @@ def _insight(
     if hr_sig:
         parts.append(
             f"**{first}'s** {s} model hits at **{hit_rate*100:.1f}%** across {n} games — "
-            f"statistically above the 52.4% break-even (p={hr_pval:.3f})."
+            f"statistically above the 52.4% break-even vs. its own L5 baseline line "
+            f"(p={hr_pval:.3f})."
         )
     else:
         parts.append(
@@ -231,9 +277,9 @@ def _insight(
     if rho is not None:
         if edge_sig:
             parts.append(
-                f"Edge size is a **meaningful predictor** of outcomes "
-                f"(Spearman ρ={rho:.2f}, p={edge_pval:.3f}) — "
-                "larger model edges do translate to higher hit rates."
+                f"Within this sample, larger edges were associated with more hits "
+                f"(Spearman ρ={rho:.2f}, one-sided p={edge_pval:.3f}) — "
+                "a correlation, not by itself proof of profitability."
             )
         else:
             parts.append(
@@ -251,8 +297,12 @@ def _insight(
         )
     else:
         parts.append(
-            f"Projection bias is **negligible** (mean error {mean_error:+.2f}, "
-            f"p={bias_pval:.3f}) — the model is well-calibrated on average."
+            f"No systematic projection bias was detected (mean error "
+            f"{mean_error:+.2f}, p={bias_pval:.3f})"
+            + (
+                ", though the sample is small for this test."
+                if n < MIN_N_RELIABLE else "."
+            )
         )
 
     parts.append(f"Overall verdict: **{verdict}**.")

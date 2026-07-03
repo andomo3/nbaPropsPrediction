@@ -4,16 +4,20 @@ services/variance_decomp.py
 Research-grade variance decomposition for player stat predictability.
 
 Uses already-cached BacktestResult rows to partition total observed variance
-into four interpretable components:
+into three interpretable components:
 
-    Var(y) = Model-explained  +  Opponent effect  +  Situational  +  Residual
+    Var(y) = Model-explained  +  Opponent effect  +  Residual
 
 Method:
   1. Model R²     — standard coefficient of determination on XGBoost residuals.
   2. Opponent η²  — one-way ANOVA eta-squared: fraction of total SS explained
                     by opponent identity (marginal, not incremental).
-  3. Opponent Δ   — partial R² of opponent dummies on the MODEL residuals
-                    (incremental information above what the model already captured).
+  3. Opponent Δ   — incremental opponent information above the model:
+                    degrees-of-freedom-ADJUSTED R² of opponent dummies on the
+                    model residuals, gated on the regression F-test and
+                    rescaled to total-variance units. (Raw R² of ~25-30
+                    dummies on 60-80 games is mechanically inflated —
+                    E[R²] ≈ p/n under pure noise.)
   4. Residual     — 1 - R² - opponent_delta (irreducible noise floor).
 
 Additional distributional stats:
@@ -224,14 +228,25 @@ def _decompose_variance(
     else:
         opponent_eta2 = 0.0
 
-    # Opponent Δ — partial R² of opponent dummies on MODEL RESIDUALS
-    # How much additional variance can opponents explain above the model?
-    if len(unique_opps) > 1 and len(unique_opps) < n:
+    # Opponent Δ — incremental opponent information above the model, in units
+    # of TOTAL variance. Raw R² here would be mechanically inflated (~25-30
+    # dummies on 60-80 residuals ⇒ E[R²] ≈ p/n under pure noise), so use the
+    # df-adjusted R² and zero it unless the regression F-test rejects
+    # "opponents explain nothing" — otherwise noise gets presented as
+    # matchup sensitivity.
+    if len(unique_opps) > 1 and n - len(unique_opps) - 1 > 0:
         opp_dummies = pd.get_dummies(opp_series, drop_first=True).astype(float)
         X_opp = sm.add_constant(opp_dummies, has_constant="add")
         try:
-            ols_result     = sm.OLS(errors, X_opp).fit()
-            opponent_delta = max(0.0, float(ols_result.rsquared))
+            ols_result = sm.OLS(errors, X_opp).fit()
+            adj_r2 = float(ols_result.rsquared_adj)
+            f_pval = float(ols_result.f_pvalue)
+            if np.isnan(adj_r2) or np.isnan(f_pval) or f_pval >= 0.05:
+                opponent_delta = 0.0
+            else:
+                # rsquared_adj is a share of RESIDUAL variance; rescale so it
+                # is commensurable with model_r2 in the decomposition below.
+                opponent_delta = max(0.0, adj_r2) * (1.0 - model_r2)
         except Exception:
             opponent_delta = 0.0
     else:
@@ -436,7 +451,8 @@ def _generate_insight(
     else:
         dist_sent = (
             f"Prediction errors are approximately normal (skewness={skew:.2f}, "
-            f"kurtosis={kurt:.2f}), consistent with well-calibrated residuals."
+            f"kurtosis={kurt:.2f}) — symmetric and thin-tailed, though "
+            f"normality alone does not establish calibration."
         )
 
     # Residual sentence

@@ -63,6 +63,7 @@ export default function StatisticalValidation({ data, loading, error }) {
         edge_correlation = {},
         calibration = {},
         sample_adequacy = {},
+        disclosures = [],
         insight,
     } = data;
 
@@ -134,6 +135,23 @@ export default function StatisticalValidation({ data, loading, error }) {
             </p>
 
             <InsightText text={insight} />
+
+            {/* Standing methodological caveats — these hold for every panel,
+                not just small samples */}
+            {disclosures.length > 0 && (
+                <details className="mt-4 group">
+                    <summary className="text-xs text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors">
+                        Methodology notes &amp; limitations ({disclosures.length})
+                    </summary>
+                    <ul className="mt-2 space-y-1.5 pl-4 list-disc marker:text-muted-foreground/50">
+                        {disclosures.map((d, i) => (
+                            <li key={i} className="text-xs text-muted-foreground leading-relaxed">
+                                {d}
+                            </li>
+                        ))}
+                    </ul>
+                </details>
+            )}
         </SectionCard>
     );
 }

@@ -44,6 +44,15 @@ SEASON_DATES: dict[int, tuple[date, date]] = {
 
 DEFAULT_SEASON = 2026
 
+# ── Shared serving fallbacks ──────────────────────────────────────────────────
+# Single source of truth for probability derivation. services/features.py,
+# services/probability.py, views.py, and generate_daily_picks.py must all use
+# these — the audit found three divergent copies.
+
+STD_DEFAULTS = {"pts": 5.0, "reb": 2.0, "ast": 1.5}   # fallback rolling stds
+STD_FLOOR = 0.5                                        # guard against ~0 stds
+PROB_CLAMP = (0.01, 0.99)   # reported probabilities never claim near-certainty
+
 # ── Backtest model comparison set ─────────────────────────────────────────────
 
 BACKTEST_MODELS = ["xgb", "rf", "lr", "naive"]

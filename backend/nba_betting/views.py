@@ -3,19 +3,28 @@ from datetime import date
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import F, FloatField, Q, Value
+from django.db.models.expressions import ExpressionWrapper
+from django.db.models.functions import Greatest
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from scipy.stats import norm
 
 logger = logging.getLogger(__name__)
 
-from .constants import BACKTEST_MODELS, DEFAULT_SEASON, MODEL_LABELS, SEASON_DATES, SEASON_REPORT_PLAYERS
+from .constants import (
+    BACKTEST_MODELS,
+    DEFAULT_SEASON,
+    MODEL_LABELS,
+    SEASON_DATES,
+    SEASON_REPORT_PLAYERS,
+    STD_DEFAULTS,
+)
 from .ml.predictor import get_predictor
 from .models import BacktestRun, DailyPick, Player
 from .services.backtest import run_backtest
 from .services.features import get_model_inputs
+from .services.probability import calculate_probability
 from .services.simulator import run_simulation
 from .services.shap_analysis import compute_shap_analysis
 from .services.variance_decomp import compute_variance_decomposition
@@ -136,17 +145,15 @@ class ManualPredictionView(APIView):
         edge_value = round(projection - line_value, 2)
         recommendation = "OVER" if edge_value > 0 else "UNDER"
 
-        # ── Derive probability from edge + player std dev ─────────────────────
-        # P(actual > line) ≈ 1 − Φ((line − projection) / std_dev)
+        # ── Derive probability (services/probability.py: Poisson for
+        #    low-count stats, Normal otherwise; clamped) ─────────────────────
         std_col = f"{stat_key}_std_L10"
         if std_col in feature_row_or_error.columns:
             std_dev = float(feature_row_or_error[std_col].iloc[0])
         else:
-            std_dev = {"pts": 6.0, "reb": 2.5, "ast": 2.0}.get(stat_key, 4.0)
-        std_dev = max(std_dev, 0.5)  # guard against zero
+            std_dev = STD_DEFAULTS.get(stat_key, 4.0)
 
-        z = (line_value - projection) / std_dev
-        prob_over  = float(max(0.01, min(0.99, 1 - norm.cdf(z))))
+        prob_over  = calculate_probability(stat_key, projection, line_value, std_dev)
         prob_under = round(1.0 - prob_over, 4)
         prob_over  = round(prob_over, 4)
 
@@ -189,10 +196,20 @@ class LitePicksView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Confidence is the probability of the RECOMMENDED side — filtering on
+        # prob_over alone would silently discard every Under pick.
         min_conf = getattr(settings, "PICKS_MIN_CONFIDENCE", 0.55)
         picks_qs = (
             DailyPick.objects.filter(pick_date=pick_date, stat=stat)
-            .filter(prob_over__gte=min_conf)
+            .annotate(
+                confidence=Greatest(
+                    F("prob_over"),
+                    ExpressionWrapper(
+                        Value(1.0) - F("prob_over"), output_field=FloatField()
+                    ),
+                )
+            )
+            .filter(confidence__gte=min_conf)
             .select_related("player", "player__current_team")
         )
 
@@ -211,7 +228,7 @@ class LitePicksView(APIView):
                 "prob_under": round(1.0 - p.prob_over, 4),
                 "projection": p.projection,
                 "edge": p.edge,
-                "confidence_pct": round(p.prob_over * 100),
+                "confidence_pct": round(max(p.prob_over, 1.0 - p.prob_over) * 100),
             })
 
         generated_at = (
