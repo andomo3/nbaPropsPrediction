@@ -40,8 +40,9 @@ logger = logging.getLogger(__name__)
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 VALID_GAME_TYPES = {"Regular Season", "Playoffs", "Play-in Tournament"}
-MIN_YEAR = 2016      # Filter to modern-era data
-MIN_MINUTES = 10     # Exclude DNP / garbage-time rows
+MIN_YEAR = 2016      # First NBA season-start year included (2016 = the 2016-17 season)
+MIN_MINUTES = 10     # Rows below this are masked in rolling windows and excluded as targets
+VAL_FRAC = 0.15      # Tail of the training period held out for early stopping
 
 # ── Per-stat feature sets ─────────────────────────────────────────────────────
 # Keys must match what features.py builds at inference time.
@@ -134,8 +135,25 @@ def _parse_minutes(series: pd.Series) -> pd.Series:
     return series.apply(_convert)
 
 
+def _season_start_year(dates: pd.Series) -> pd.Series:
+    """NBA season-start year: Oct–Dec → same year, Jan–Sep → previous year."""
+    return dates.dt.year.where(dates.dt.month >= 10, dates.dt.year - 1).astype(int)
+
+
+def eligible_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Rows usable as training/eval targets: played at least MIN_MINUTES."""
+    return df[df["numMinutes"] >= MIN_MINUTES]
+
+
 def load_and_filter_csv(csv_path: Optional[str] = None) -> pd.DataFrame:
-    """Load PlayerStatistics.csv, apply game-type / year / minutes filters."""
+    """
+    Load PlayerStatistics.csv and apply game-type + modern-era season filters.
+
+    Sub-MIN_MINUTES rows are KEPT so rolling windows, season averages,
+    days_rest, and opponent-defense totals see the same game universe as the
+    serving pipeline (services/features.py). Use eligible_rows() to select
+    training targets.
+    """
     if csv_path is None:
         csv_path = str(_default_csv_path())
 
@@ -146,19 +164,24 @@ def load_and_filter_csv(csv_path: Optional[str] = None) -> pd.DataFrame:
     # Game-type filter
     df = df[df["gameType"].isin(VALID_GAME_TYPES)].copy()
 
-    # Season-year filter
-    if "year" in df.columns:
-        df = df[pd.to_numeric(df["year"], errors="coerce").fillna(0) >= MIN_YEAR]
-
-    # Minutes
-    df["numMinutes"] = _parse_minutes(df["numMinutes"])
-    df = df[df["numMinutes"] >= MIN_MINUTES]
-
     # Parse date (drop timezone suffix, keep just the date)
     df["date"] = pd.to_datetime(
         df["gameDateTimeEst"], utc=True, errors="coerce"
     ).dt.tz_localize(None).dt.normalize()
     df = df.dropna(subset=["date"])
+
+    # Modern-era filter on the NBA season-start year (a Feb 2017 game belongs
+    # to season 2016). Derived from the game date — the CSV has no 'year'
+    # column, and this filter must never silently no-op.
+    df["season_year"] = _season_start_year(df["date"])
+    df = df[df["season_year"] >= MIN_YEAR]
+    if df.empty:
+        raise ValueError(
+            f"No rows with season_year >= {MIN_YEAR} — check gameDateTimeEst parsing."
+        )
+
+    # Minutes (parsed but NOT row-filtered here — see eligible_rows)
+    df["numMinutes"] = _parse_minutes(df["numMinutes"])
 
     # is_home flag
     df["is_home"] = pd.to_numeric(df["home"], errors="coerce").fillna(0).astype(int)
@@ -191,11 +214,19 @@ def build_player_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Add per-player rolling features (shift=1 to prevent leakage).
 
-    Modifies df in-place and returns it.
+    Mirrors services/features.py::_add_rolling_features: sub-MIN_MINUTES games
+    are NaN-masked inside rolling windows (they occupy a window slot but
+    contribute no value), while days_rest and season averages use every game —
+    the same conventions the serving pipeline applies.
     """
     df = df.sort_values(["personId", "date"]).reset_index(drop=True)
 
-    grp = df.groupby("personId", sort=False)
+    # NaN-mask low-minute games so they don't pollute rolling averages
+    masked = df[["points", "reboundsTotal", "assists", "numMinutes", "fg_pct"]].copy()
+    low_min = ~(df["numMinutes"] >= MIN_MINUTES)   # catches NaN minutes too
+    masked.loc[low_min, :] = np.nan
+    masked["personId"] = df["personId"]
+    grp = masked.groupby("personId", sort=False)
 
     # ── Rolling L5 / L10 means ────────────────────────────────────────────────
     stat_map = [
@@ -223,9 +254,9 @@ def build_player_features(df: pd.DataFrame) -> pd.DataFrame:
             lambda x: x.shift(1).rolling(10, min_periods=5).std()
         )
 
-    # ── Days rest ─────────────────────────────────────────────────────────────
+    # ── Days rest (over every game, matching services/features.py) ───────────
     df["days_rest"] = (
-        grp["date"]
+        df.groupby("personId", sort=False)["date"]
         .transform(lambda x: x.diff().dt.days)
         .fillna(3)
         .clip(upper=10)
@@ -233,15 +264,13 @@ def build_player_features(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # ── Season expanding average (shifted, per player per season year) ────────
-    # Derive season_year from the CSV 'year' column if present, else from date.
-    # NBA seasons span two calendar years (Oct–Jun); we use the calendar year of
-    # the game date as a season proxy, which is consistent across both sources.
-    if "year" in df.columns:
-        df["_season_year"] = pd.to_numeric(df["year"], errors="coerce")
-    else:
-        df["_season_year"] = pd.to_datetime(df["date"]).dt.year
+    # Season boundary is Oct 1, matching services/features.py::_get_season_avg
+    # and services/backtest.py::_add_season_features. Uses raw (unmasked)
+    # values — the serving season average includes low-minute games.
+    if "season_year" not in df.columns:
+        df["season_year"] = _season_start_year(pd.to_datetime(df["date"]))
 
-    grp_season = df.groupby(["personId", "_season_year"], sort=False)
+    grp_season = df.groupby(["personId", "season_year"], sort=False)
     for col, feat in [("points", "pts"), ("reboundsTotal", "reb"), ("assists", "ast")]:
         df[f"season_avg_{feat}"] = grp_season[col].transform(
             lambda x: x.shift(1).expanding(min_periods=1).mean()
@@ -339,20 +368,22 @@ def walk_forward_splits(
     Yields:
         (train_df, test_df, test_year)
 
-    Example folds (default):
-        Train 2016-2020 → Test 2021
-        Train 2016-2021 → Test 2022
-        Train 2016-2022 → Test 2023
-        Train 2016-2023 → Test 2024
-    """
-    if "year" not in df.columns:
-        if "date" not in df.columns:
-            raise ValueError("DataFrame must have a 'year' or 'date' column for walk_forward_splits().")
-        df = df.copy()
-        df["year"] = pd.to_datetime(df["date"]).dt.year
+    Years are NBA season-start years (Oct 1 boundary), so test_year=2021 means
+    the 2021-22 season.
 
+    Example folds (default):
+        Train seasons 2016-2020 → Test season 2021
+        Train seasons 2016-2021 → Test season 2022
+        Train seasons 2016-2022 → Test season 2023
+        Train seasons 2016-2023 → Test season 2024
+    """
     df = df.copy()
-    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    if "season_year" in df.columns:
+        df["year"] = pd.to_numeric(df["season_year"], errors="coerce")
+    elif "date" in df.columns:
+        df["year"] = _season_start_year(pd.to_datetime(df["date"]))
+    else:
+        raise ValueError("DataFrame must have a 'season_year' or 'date' column for walk_forward_splits().")
 
     for test_year in range(first_test_year, last_test_year + 1):
         train = df[df["year"] < test_year].reset_index(drop=True)
@@ -379,6 +410,8 @@ def _eval_regression(preds: np.ndarray, actuals: np.ndarray) -> Dict[str, float]
 def train_xgboost_regression(
     X_train: np.ndarray,
     y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
     X_test: np.ndarray,
     y_test: np.ndarray,
     feature_names: List[str],
@@ -386,21 +419,34 @@ def train_xgboost_regression(
     early_stopping: int = 50,
 ) -> Tuple[xgb.Booster, Dict]:
     dtrain = xgb.DMatrix(X_train, label=y_train, feature_names=feature_names)
+    dval   = xgb.DMatrix(X_val,   label=y_val,   feature_names=feature_names)
     dtest  = xgb.DMatrix(X_test,  label=y_test,  feature_names=feature_names)
 
+    # Early stopping selects the round count on a validation slice carved from
+    # the tail of the training period — the test partition takes no part in
+    # any selection decision.
     model = xgb.train(
         XGB_PARAMS,
         dtrain,
         num_boost_round=num_rounds,
-        evals=[(dtrain, "train"), (dtest, "eval")],
+        evals=[(dtrain, "train"), (dval, "val")],
         early_stopping_rounds=early_stopping,
         verbose_eval=100,
     )
 
+    # Persist only the selected rounds so serving predicts with the exact
+    # model that validation chose (a loaded Booster otherwise uses all trees).
+    if getattr(model, "best_iteration", None) is not None:
+        try:
+            model = model[: model.best_iteration + 1]
+        except (TypeError, IndexError):
+            logger.warning("Booster slicing unavailable; saving full model.")
+
     train_metrics = _eval_regression(model.predict(dtrain), y_train)
+    val_metrics   = _eval_regression(model.predict(dval),   y_val)
     test_metrics  = _eval_regression(model.predict(dtest),  y_test)
 
-    return model, {"train": train_metrics, "test": test_metrics}
+    return model, {"train": train_metrics, "val": val_metrics, "test": test_metrics}
 
 
 def train_rf_regression(
@@ -438,6 +484,8 @@ def train_lr_regression(
 def train_catboost_regression(
     X_train: np.ndarray,
     y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
     X_test: np.ndarray,
     y_test: np.ndarray,
 ) -> Tuple[Optional[object], Dict]:
@@ -454,15 +502,18 @@ def train_catboost_regression(
         verbose=100,
         random_seed=42,
     )
+    # Same validation-slice discipline as XGBoost: the test partition is
+    # never used to pick the iteration count.
     model.fit(
         X_train, y_train,
-        eval_set=(X_test, y_test),
+        eval_set=(X_val, y_val),
         use_best_model=True,
     )
 
     train_metrics = _eval_regression(model.predict(X_train), y_train)
+    val_metrics   = _eval_regression(model.predict(X_val),   y_val)
     test_metrics  = _eval_regression(model.predict(X_test),  y_test)
-    return model, {"train": train_metrics, "test": test_metrics}
+    return model, {"train": train_metrics, "val": val_metrics, "test": test_metrics}
 
 
 # ── Main entry point ──────────────────────────────────────────────────────────
@@ -490,25 +541,38 @@ def train_all_regression_models(
     df = build_player_features(df)
 
     # ── Opponent defense features ─────────────────────────────────────────────
+    # Computed on the FULL game universe (all minutes) so team totals match
+    # the serving aggregation in services/features.py.
     logger.info("Computing opponent defensive rolling averages ...")
     df = build_opponent_defense(df)
 
-    # ── Train / test split ────────────────────────────────────────────────────
-    train_df, test_df = time_split(df)
+    # ── Target eligibility ────────────────────────────────────────────────────
+    # Features above were computed over every game; only games with
+    # >= MIN_MINUTES are used as training/eval targets.
+    df = eligible_rows(df)
+
+    # ── Train / val / test split (all chronological) ──────────────────────────
+    train_full_df, test_df = time_split(df)
+    fit_df, val_df = time_split(train_full_df, test_frac=VAL_FRAC)
     split_date = test_df["date"].min()
+    val_date = val_df["date"].min()
     logger.info(
-        f"Split date: {split_date.date()}  |  "
-        f"Train: {len(train_df):,}  |  Test: {len(test_df):,}"
+        f"Fit: {len(fit_df):,} (< {val_date.date()})  |  "
+        f"Val: {len(val_df):,} ({val_date.date()} – {split_date.date()})  |  "
+        f"Test: {len(test_df):,} (>= {split_date.date()})"
     )
 
     metadata: Dict = {
-        "trained_at":   datetime.utcnow().isoformat() + "Z",
-        "model_type":   "regression",
-        "csv_min_year": MIN_YEAR,
-        "split_date":   str(split_date.date()),
-        "train_rows":   len(train_df),
-        "test_rows":    len(test_df),
-        "stats":        {},
+        "trained_at":            datetime.utcnow().isoformat() + "Z",
+        "model_type":            "regression",
+        "min_season_start_year": MIN_YEAR,
+        "season_boundary":       "oct1",
+        "val_split_date":        str(val_date.date()),
+        "split_date":            str(split_date.date()),
+        "train_rows":            len(fit_df),
+        "val_rows":              len(val_df),
+        "test_rows":             len(test_df),
+        "stats":                 {},
     }
 
     # ── Per-stat training ─────────────────────────────────────────────────────
@@ -519,23 +583,26 @@ def train_all_regression_models(
         logger.info(f"  Features ({len(feats)}): {feats}")
 
         cols_needed = feats + [target_col]
-        stat_train = train_df[cols_needed].dropna()
+        stat_train = fit_df[cols_needed].dropna()
+        stat_val   = val_df[cols_needed].dropna()
         stat_test  = test_df[cols_needed].dropna()
 
-        if stat_train.empty or stat_test.empty:
+        if stat_train.empty or stat_val.empty or stat_test.empty:
             logger.error(f"  [SKIP] No valid rows for {stat} after dropna.")
             continue
 
         X_train = stat_train[feats].values.astype(np.float32)
         y_train = stat_train[target_col].values.astype(np.float32)
+        X_val   = stat_val[feats].values.astype(np.float32)
+        y_val   = stat_val[target_col].values.astype(np.float32)
         X_test  = stat_test[feats].values.astype(np.float32)
         y_test  = stat_test[target_col].values.astype(np.float32)
 
-        logger.info(f"  Train rows: {len(X_train):,}  |  Test rows: {len(X_test):,}")
+        logger.info(f"  Train rows: {len(X_train):,}  |  Val rows: {len(X_val):,}  |  Test rows: {len(X_test):,}")
 
         # XGBoost
         xgb_model, xgb_metrics = train_xgboost_regression(
-            X_train, y_train, X_test, y_test, feats
+            X_train, y_train, X_val, y_val, X_test, y_test, feats
         )
         xgb_path = model_dir / f"{stat}_xgb.json"
         xgb_model.save_model(str(xgb_path))
@@ -569,7 +636,7 @@ def train_all_regression_models(
         cb_metrics: Dict = {}
         if CATBOOST_AVAILABLE and not skip_catboost:
             cb_model, cb_metrics = train_catboost_regression(
-                X_train, y_train, X_test, y_test
+                X_train, y_train, X_val, y_val, X_test, y_test
             )
             if cb_model is not None:
                 cb_path = model_dir / f"{stat}_catboost.cbm"
@@ -584,6 +651,7 @@ def train_all_regression_models(
             "features":      feats,
             "target":        target_col,
             "train_samples": int(len(X_train)),
+            "val_samples":   int(len(X_val)),
             "test_samples":  int(len(X_test)),
             "xgb":           xgb_metrics,
             "rf":            rf_metrics,

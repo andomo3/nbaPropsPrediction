@@ -41,6 +41,7 @@ from nba_betting.ml.train_regression import (
     load_and_filter_csv,
     build_player_features,
     build_opponent_defense,
+    eligible_rows,
     train_xgboost_regression,
     FEATURE_COLUMNS,
     STAT_TARGET,
@@ -60,7 +61,7 @@ FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Number of test-set rows to run SHAP on (keep low for speed)
 SHAP_SAMPLE_SIZE = 5_000
-EXPLANATION_YEAR = 2024   # hold-out year for SHAP explanations
+EXPLANATION_YEAR = 2024   # NBA season-start year held out for SHAP (2024 = 2024-25)
 
 
 def run_shap_analysis(csv_path: str | None = None):
@@ -74,29 +75,40 @@ def run_shap_analysis(csv_path: str | None = None):
     df = build_player_features(df)
     logger.info("Building opponent defense features ...")
     df = build_opponent_defense(df)
+    # Features are computed over every game; only >= MIN_MINUTES games are
+    # usable as train/eval targets (mirrors train_all_regression_models).
+    df = eligible_rows(df)
 
-    if "year" in df.columns:
-        df["year"] = pd.to_numeric(df["year"], errors="coerce")
-    else:
-        df["year"] = pd.to_datetime(df["date"]).dt.year
+    # NBA season-start year (Oct-1 boundary), provided by load_and_filter_csv
+    df["year"] = pd.to_numeric(df["season_year"], errors="coerce")
 
     for stat, target_col in STAT_TARGET.items():
         logger.info(f"\n{'─'*60}")
         logger.info(f"  Stat: {stat.upper()}")
 
         feats = FEATURE_COLUMNS[stat]
-        cols  = feats + [target_col]
+        cols  = list(dict.fromkeys(feats + [target_col, "date"]))
 
-        # Train on all data except the explanation year
-        train_df = df[df["year"] < EXPLANATION_YEAR][cols].dropna()
+        # Train on all seasons before the explanation season
+        train_df = df[df["year"] < EXPLANATION_YEAR][cols].dropna().sort_values("date")
         expl_df  = df[df["year"] == EXPLANATION_YEAR][cols].dropna()
 
         if train_df.empty or expl_df.empty:
             logger.warning(f"  [SKIP] insufficient data for {stat}")
             continue
 
-        X_train = train_df[feats].values.astype(np.float32)
-        y_train = train_df[target_col].values.astype(np.float32)
+        # Chronological validation slice from the train tail for early
+        # stopping — the explanation season plays no part in round selection.
+        val_cut = int(len(train_df) * 0.85)
+        if val_cut == 0 or val_cut == len(train_df):
+            logger.warning(f"  [SKIP] train set too small for a validation slice ({stat})")
+            continue
+        fit_df, val_df = train_df.iloc[:val_cut], train_df.iloc[val_cut:]
+
+        X_train = fit_df[feats].values.astype(np.float32)
+        y_train = fit_df[target_col].values.astype(np.float32)
+        X_val   = val_df[feats].values.astype(np.float32)
+        y_val   = val_df[target_col].values.astype(np.float32)
         X_expl  = expl_df[feats].values.astype(np.float32)
         y_expl  = expl_df[target_col].values.astype(np.float32)
 
@@ -104,7 +116,7 @@ def run_shap_analysis(csv_path: str | None = None):
 
         # ── Train final model ─────────────────────────────────────────────────
         model, metrics = train_xgboost_regression(
-            X_train, y_train, X_expl, y_expl, feats
+            X_train, y_train, X_val, y_val, X_expl, y_expl, feats
         )
         logger.info(
             f"  Final model: Test MAE={metrics['test']['mae']:.3f}  "

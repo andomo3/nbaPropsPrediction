@@ -34,6 +34,7 @@ from nba_betting.ml.train_regression import (
     load_and_filter_csv,
     build_player_features,
     build_opponent_defense,
+    eligible_rows,
     walk_forward_splits,
     train_xgboost_regression,
     FEATURE_COLUMNS,
@@ -95,8 +96,20 @@ def evaluate_fold(
         logger.warning(f"  [SKIP] {stat.upper()} fold {test_year} — no valid rows after dropna")
         return [], pd.DataFrame()
 
-    X_train = stat_train[feats].values.astype(np.float32)
-    y_train = stat_train[target_col].values.astype(np.float32)
+    # Chronological validation slice from the train-fold tail for XGBoost
+    # early stopping — the test fold takes no part in round selection.
+    # All models fit on the same fit partition so comparisons stay fair.
+    stat_train = stat_train.sort_values("date")
+    val_cut  = int(len(stat_train) * 0.85)
+    if val_cut == 0 or val_cut == len(stat_train):
+        logger.warning(f"  [SKIP] {stat.upper()} fold {test_year} — train fold too small for a validation slice")
+        return [], pd.DataFrame()
+    stat_fit, stat_val = stat_train.iloc[:val_cut], stat_train.iloc[val_cut:]
+
+    X_train = stat_fit[feats].values.astype(np.float32)
+    y_train = stat_fit[target_col].values.astype(np.float32)
+    X_val   = stat_val[feats].values.astype(np.float32)
+    y_val   = stat_val[target_col].values.astype(np.float32)
     X_test  = stat_test[feats].values.astype(np.float32)
     y_test  = stat_test[target_col].values.astype(np.float32)
 
@@ -135,7 +148,7 @@ def evaluate_fold(
 
     # ── 4. XGBoost ────────────────────────────────────────────────────────────
     xgb_model, xgb_metrics = train_xgboost_regression(
-        X_train, y_train, X_test, y_test, feats
+        X_train, y_train, X_val, y_val, X_test, y_test, feats
     )
     xgb_pred = xgb_model.predict(
         __import__("xgboost").DMatrix(X_test, feature_names=feats)
@@ -175,6 +188,9 @@ def run_walk_forward_eval(csv_path: str | None = None):
     df = build_player_features(df)
     logger.info("Building opponent defense features ...")
     df = build_opponent_defense(df)
+    # Features are computed over every game; only >= MIN_MINUTES games are
+    # usable as train/eval targets (mirrors train_all_regression_models).
+    df = eligible_rows(df)
 
     all_metrics  = []
     all_pred_dfs = []
