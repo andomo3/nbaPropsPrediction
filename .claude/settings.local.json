@@ -31,7 +31,8 @@
       "Bash(docker compose exec web python manage.py shell -c ' *)",
       "Bash(ls -lh data/raw/PlayerStatisticsExtended.csv data/raw/PlayerStatistics.csv)",
       "Bash(dir data\\\\raw\\\\*.csv)",
-      "Bash(echo \".claude/\" >> \"C:\\\\Users\\\\maxst\\\\Desktop\\\\Projects\\\\nbaPropsPrediction\\\\.git\\\\info\\\\exclude\" && cat \"C:\\\\Users\\\\maxst\\\\Desktop\\\\Projects\\\\nbaPropsPrediction\\\\.git\\\\info\\\\exclude\")"
+      "Bash(echo \".claude/\" >> \"C:\\\\Users\\\\maxst\\\\Desktop\\\\Projects\\\\nbaPropsPrediction\\\\.git\\\\info\\\\exclude\" && cat \"C:\\\\Users\\\\maxst\\\\Desktop\\\\Projects\\\\nbaPropsPrediction\\\\.git\\\\info\\\\exclude\")",
+      "Bash(git clone *)"
     ]
   }
 }

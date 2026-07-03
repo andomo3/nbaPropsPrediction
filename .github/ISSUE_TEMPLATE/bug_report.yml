@@ -1,0 +1,38 @@
+name: Bug report
+description: Something broke — a command failed, an endpoint errored, or the UI rendered wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected to happen
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened
+      description: Include the error message or a screenshot if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. docker compose up -d
+        2. curl http://localhost:8000/api/...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "`docker compose logs web` for backend issues; browser console for frontend issues."
+      render: shell
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "OS, Docker version, browser (if frontend)"

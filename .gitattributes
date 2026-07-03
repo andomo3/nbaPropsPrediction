@@ -2,4 +2,3 @@ data/raw/*.csv filter=lfs diff=lfs merge=lfs -text
 data/landing/*.csv filter=lfs diff=lfs merge=lfs -text
 data/archive/*.csv filter=lfs diff=lfs merge=lfs -text
 data/model_ready/*.csv filter=lfs diff=lfs merge=lfs -text
-exports/*.csv filter=lfs diff=lfs merge=lfs -text
