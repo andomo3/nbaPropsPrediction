@@ -34,7 +34,15 @@ Produced by the `methodology-audit` workflow (5 dimension auditors, every findin
 - `research/paper.tex` fully corrected against the regenerated results: dataset (295,900 rows / 206,994 targets, 2016-17+ seasons), NBA-season walk-forward folds with a 15% fit/val split, honest MAEs (XGB 4.92/1.99/1.45), SHAP re-ranked from the 2024-25 hold-out (the "home-court playmaking" finding did not survive), betting ROI vs LinReg line revised +13.1% → +6.4% with narrow-margin framing, Table 3 caption fixed, single data-provenance story, new iid/baseline-relativity limitations paragraph.
 - `docs/ARCHITECTURE.md` rewritten for the regression system (classifier confined to a History section) with a Known Limitations section; `docs/METHODOLOGY.md` created; `docs/ML_FEATURE_GUIDE.md` rewritten from `FEATURE_COLUMNS`; `README_FEATURES.md` replaced with a pointer; stale docs archived to `docs/archive/` with banners.
 
-**Still open:** floor_ceiling distributional claims, backtest range guard vs. model windows, Benjamini–Hochberg as an upgrade over disclosure, README score-formula wording (R² term description garbled at line ~189), frontend viewership pass, tests/CI, notebook, dead-code removal + views.py split (plan phases 2-3/5-6).
+**Batch 6 — refactor, tests, remaining minors (fixed):**
+- Dead code removed: `ml/model_trainer.py`, `ml/visualizations.py`, empty stubs, `exports/test.py` (~1,350 lines).
+- `views.py` (1,340 lines) split into a `views/` package (`_shared`, `predictions`, `picks`, `backtests`, `intelligence`); urls.py unchanged; all endpoints smoke-verified.
+- Test suite: 50 tests green (leakage poison tests, train/serve feature-parity tripwire, probability, statistical validation vs hand-computed scipy values, predictability score, backtest scoring incl. push voiding) + GitHub Actions CI (backend tests + frontend build).
+- Backtest payloads now carry `sample_regime` (out-of-sample / selection-overlap / training-overlap) classified against model_metadata.json split dates.
+- floor_ceiling (M7): condition splits gated at n≥15, median mislabel fixed, causal hot-vs-rested phrasing made descriptive, betting-advice line removed.
+- README predictability-score formulas corrected.
+
+**Still open:** Benjamini–Hochberg as an upgrade over per-panel disclosure (optional enhancement), frontend viewership pass, walkthrough notebook, README refresh + security review (plan phases 5-7).
 
 
 ## CRITICAL (6)

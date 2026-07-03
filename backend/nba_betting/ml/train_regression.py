@@ -3,7 +3,7 @@ Regression-based NBA player props training.
 
 Trains XGBoost (and optionally CatBoost) regression models to predict actual
 stat values (pts, reb, ast) from player rolling features + opponent defensive
-context.  Replaces the old binary classifier in model_trainer.py.
+context.
 
 Data source: data/raw/PlayerStatistics.csv (NBA API historical data).
 

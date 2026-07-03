@@ -398,9 +398,9 @@ These are first-class caveats, not footnotes. The audit record
 
 - The original system was a **binary over/under classifier** (single shared 17-feature set,
   AUC ≈ 0.62–0.65, `predict_probability`). It was replaced by the per-stat regression
-  pipeline described above; its trainer (`backend/nba_betting/ml/model_trainer.py`) remains
-  in the tree as unused legacy code (imported by nothing) and is slated for removal — do not
-  reuse it: its hyperparameter search uses shuffled, non-chronological splits.
+  pipeline described above; its trainer (`ml/model_trainer.py`) was removed from the tree
+  in July 2026 (it was imported by nothing, and its hyperparameter search used shuffled,
+  non-chronological splits).
 - Earlier design documents (`docs/archive/IMPLEMENTATION_PLAN.md` — quarter-level predictor,
   Next.js; `docs/archive/DATA_INGESTION_STRATEGY.md` — quarter-slice ingestion) are archived
   and kept for historical reference only.

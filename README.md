@@ -186,9 +186,9 @@ The composite score that ranks players on the leaderboard is:
 score = R²(50%) + inverse-CV(30%) + hit-rate-excess(20%)
 ```
 
-- **R²** — how much of the player's actual variance is explained by the model's errors
+- **R²** — the share of the player's game-to-game variance the model explains: `1 − Var(errors) / Var(actuals)`, floored at 0
 - **Inverse-CV** — how consistent the player's raw output is (low variance relative to mean = high score)
-- **Hit-rate excess** — how far above the 52.4% betting break-even the model performs
+- **Hit-rate excess** — how far above the 52.4% (-110) break-even the model's backtest hit rate lands, measured against the synthetic L5 baseline line (see [docs/METHODOLOGY.md](docs/METHODOLOGY.md))
 
 Tiers: **High** ≥ 65 · **Moderate** ≥ 40 · **Low** < 40
 
