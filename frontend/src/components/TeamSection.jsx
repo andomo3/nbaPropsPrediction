@@ -8,7 +8,7 @@ const TEAM = [
     {
         name: 'Abba Ndomo',
         role: 'Founder · Data Engineer, Data Scientist & Backend Developer',
-        bio: 'Shapes the modeling strategy and feature pipelines that drive PropEdge.',
+        bio: 'Shapes the modeling strategy and feature pipelines that drive Perchance.',
         image: abbaFounder,
     },
     {

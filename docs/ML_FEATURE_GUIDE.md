@@ -1,7 +1,7 @@
 # ML Feature Guide
 
 > Last updated: 2026-07-03. Describes the features consumed by the deployed
-> NBA Props Intelligence regression models.
+> Perchance regression models.
 
 The **authoritative feature list** is `FEATURE_COLUMNS` in
 `backend/nba_betting/ml/train_regression.py`. Three code paths build these features and

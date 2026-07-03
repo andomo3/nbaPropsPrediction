@@ -1,4 +1,4 @@
-# Contributing to NBA Props Intelligence
+# Contributing to Perchance
 
 Thanks for your interest. The project is open to contributors of all skill levels — whether you want to improve the ML pipeline, add a new frontend visualization, fix a bug, or improve documentation.
 

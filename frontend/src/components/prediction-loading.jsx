@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Database, TrendingUp, Brain, Sparkles, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import logo from '../assets/perchave_final.png';
+import logo from '../assets/perchance_final.png';
 
 const DEFAULT_DURATION = 6000;
 
@@ -45,7 +45,7 @@ const PredictionLoading = ({ duration = DEFAULT_DURATION }) => {
                         <div className="absolute inset-[-4px] rounded-3xl bg-primary/20 blur-xl animate-pulse" />
 
                         <div className="relative w-24 h-24 rounded-3xl bg-card border-2 border-primary/30 flex items-center justify-center">
-                            <img src={logo} alt="PropEdge" className="h-12 w-12 object-contain" />
+                            <img src={logo} alt="Perchance" className="h-12 w-12 object-contain" />
                         </div>
 
                         <div
@@ -70,7 +70,7 @@ const PredictionLoading = ({ duration = DEFAULT_DURATION }) => {
                 </div>
 
                 <div className="mt-6 text-center">
-                    <span className="text-2xl font-bold text-foreground tracking-tight">PropEdge</span>
+                    <span className="text-2xl font-bold text-foreground tracking-tight">Perchance</span>
                     <div
                         className="h-0.5 w-0 bg-primary mx-auto mt-2 animate-expand"
                         style={{ '--expand-duration': `${duration}ms` }}

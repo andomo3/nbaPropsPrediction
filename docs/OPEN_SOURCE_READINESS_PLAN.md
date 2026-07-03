@@ -52,7 +52,7 @@ Owner: `docs-writer` (claims verified against post-refactor code).
 - **README refresh**: honest scope statement ("insight, not a bet slip" is good — keep it), link METHODOLOGY.md, responsible-gambling note, badges/CI.
 - **`docs/API.md`**: every endpoint with params and example responses.
 - **Archive stale docs** to `docs/archive/` with deprecation banners: `IMPLEMENTATION_PLAN.md`, `backend/docs/DATA_INGESTION_STRATEGY.md`; rewrite `ML_FEATURE_GUIDE.md` from the unified feature module; update `ARCHITECTURE.md`.
-- **One product name everywhere** — decide between "NBA Props Intelligence" (README), "PropEdge" (ARCHITECTURE), "perchave" (frontend assets), then sweep.
+- **One product name everywhere** — DECIDED 2026-07-03: **Perchance**. Swept across README, CONTRIBUTING, docs/, frontend components, page title, and asset filenames.
 
 ## Phase 5 — Methodology walkthrough notebook
 

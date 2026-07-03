@@ -1,8 +1,8 @@
-# NBA Props Intelligence
+# Perchance
 
 > **Understand players, not just lines.**
 
-NBA Props Intelligence is an open-source analytics platform that goes beyond win/loss prediction. It answers the question serious bettors and basketball analysts actually care about: *under what conditions does a player become predictable — or unpredictable — and why?*
+Perchance is an open-source analytics platform that goes beyond win/loss prediction. It answers the question serious bettors and basketball analysts actually care about: *under what conditions does a player become predictable — or unpredictable — and why?*
 
 Instead of chasing projections, the platform builds a full behavioral profile for each player: where the model has edge and where it doesn't, how performance shifts by rest, form, and matchup, and what the realistic floor and ceiling look like on any given night. The goal is insight, not a bet slip.
 
