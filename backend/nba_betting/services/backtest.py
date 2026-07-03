@@ -14,6 +14,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from typing import Any
 
@@ -22,7 +23,7 @@ import pandas as pd
 from django.db.models import Count, Max
 
 from nba_betting.ml.predictor import ModelPredictor
-from nba_betting.ml.train_regression import FEATURE_COLUMNS
+from nba_betting.ml.train_regression import FEATURE_COLUMNS, _default_model_dir
 from nba_betting.models import BacktestResult, BacktestRun, PlayerStats
 from nba_betting.services.features import (
     _add_rolling_features,
@@ -42,6 +43,29 @@ def _get_predictor() -> ModelPredictor:
     if _predictor is None:
         _predictor = ModelPredictor()
     return _predictor
+
+
+def _sample_regime(date_from: date, date_to: date) -> str:
+    """
+    Classify a backtest window against the deployed model's split dates so
+    accuracy is never silently presented as out-of-sample when it isn't.
+    Classified by the window's EARLIEST date (worst case for a mixed window).
+
+      out-of-sample     — entirely within the held-out test partition
+      selection-overlap — overlaps the early-stopping validation window
+      training-overlap  — overlaps the model's fit window
+    """
+    try:
+        meta = json.loads((_default_model_dir() / "model_metadata.json").read_text())
+        val_start = date.fromisoformat(meta["val_split_date"])
+        test_start = date.fromisoformat(meta["split_date"])
+    except Exception:
+        return "unknown"
+    if date_from >= test_start:
+        return "out-of-sample"
+    if date_from >= val_start:
+        return "selection-overlap"
+    return "training-overlap"
 
 
 def run_backtest(
@@ -256,6 +280,7 @@ def run_backtest(
         "model":       model,
         "date_from":   str(date_from),
         "date_to":     str(date_to),
+        "sample_regime": _sample_regime(date_from, date_to),
         "aggregate": {
             "total_bets": total_bets,
             "wins":       wins,
@@ -423,6 +448,7 @@ def _serialize_run(run: BacktestRun) -> dict[str, Any]:
         "model":       run.model,
         "date_from":   str(run.date_from),
         "date_to":     str(run.date_to),
+        "sample_regime": _sample_regime(run.date_from, run.date_to),
         "aggregate": {
             "total_bets": run.total_bets,
             "wins":       run.wins,
