@@ -40,5 +40,8 @@ out/
 # Data
 /data/raw/
 
+# CatBoost training artifacts
+catboost_info/
+
 # Claude Code — agent definitions, memory, and local session state
 .claude/
