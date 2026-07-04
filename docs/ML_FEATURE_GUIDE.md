@@ -13,12 +13,6 @@ intentionally implement identical conventions:
 | Live serving | `backend/nba_betting/services/features.py` (`get_model_inputs`) | ESPN-synced PostgreSQL |
 | Backtest | `backend/nba_betting/services/backtest.py` (reuses `features.py` helpers + `_add_season_features`, `_batch_opponent_defense`) | ESPN-synced PostgreSQL |
 
-> **Note on `notebooks/feature_engineering.py`:** that script is an **orphaned experimental
-> pipeline** (Holt damped trends `trend_pts/reb/ast`, `fga_per_min_l10`, `proj_volume`,
-> `cv_l10`, `opp_avg_*_allowed_l10`, written to `exports/nba_model_ready.csv`). None of its
-> outputs are consumed by any deployed model. It is **not** the source of the features
-> documented here — see [Appendix](#appendix-orphaned-experimental-pipeline).
-
 ---
 
 ## Per-stat feature sets
@@ -217,19 +211,3 @@ occupies a window slot but contributes no value.
 - **Early-window noise.** `min_periods=1` on the L5/L10 means and the opponent-defense
   rolling means that early-season values can be built from a single game; `std_L10`
   requires 5 valid prior games and falls back to fixed defaults below that.
-
----
-
-## Appendix: orphaned experimental pipeline
-
-`notebooks/feature_engineering.py` (a PostgreSQL/SQL-view + statsmodels pipeline that
-writes `exports/nba_model_ready.csv`) is an experiment from an earlier batch-processing
-effort. It produces a **different** feature family: Holt damped-trend features (`trend_pts`, `trend_reb`,
-`trend_ast`), volume/volatility features (`fga_per_min_l10`, `proj_volume`, `cv_l10`),
-and opponent features under different names (`opp_avg_pts_allowed_l10` etc., with a
-3-game minimum and league-average fill — conventions the production pipeline does
-**not** use).
-
-None of these columns appear in `FEATURE_COLUMNS`, and no trained or deployed model
-consumes them. Treat that script as historical experimentation, not documentation of the
-live system.

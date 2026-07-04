@@ -40,5 +40,11 @@ out/
 # Data
 /data/raw/
 
+# CatBoost training artifacts
+catboost_info/
+
+# Research manuscript & analyses — private repo (perchance-research)
+/research/
+
 # Claude Code — agent definitions, memory, and local session state
 .claude/
