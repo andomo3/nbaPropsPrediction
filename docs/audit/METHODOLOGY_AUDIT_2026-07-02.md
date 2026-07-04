@@ -2,6 +2,8 @@
 
 Produced by the `methodology-audit` workflow (5 dimension auditors, every finding adversarially verified by an independent agent). **43 confirmed findings** (6 critical, 15 major, 22 minor), 0 refuted, 42 assumptions to disclose in METHODOLOGY.md.
 
+> **Redaction note (2026-07-04):** the companion research manuscript and its analyses were moved to a private repository ahead of journal submission. Findings that quoted manuscript text (C5, C6, M19–M22, and parts of M18/M21) are paraphrased or redacted below; the unredacted audit is kept with the manuscript.
+
 ## Remediation log (updated 2026-07-03)
 
 **Batch 1 — training pipeline (fixed, retrained, re-seeded):**
@@ -31,7 +33,7 @@ Produced by the `methodology-audit` workflow (5 dimension auditors, every findin
 - `docs/METHODOLOGY.md` created (assumptions consolidated from this audit's 42 items).
 
 **Batch 5 — docs & paper (fixed):**
-- `research/paper.tex` fully corrected against the regenerated results: dataset (295,900 rows / 206,994 targets, 2016-17+ seasons), NBA-season walk-forward folds with a 15% fit/val split, honest MAEs (XGB 4.92/1.99/1.45), SHAP re-ranked from the 2024-25 hold-out (the "home-court playmaking" finding did not survive), betting ROI vs LinReg line revised +13.1% → +6.4% with narrow-margin framing, Table 3 caption fixed, single data-provenance story, new iid/baseline-relativity limitations paragraph.
+- The companion research manuscript was fully corrected against the regenerated post-audit results (details tracked in the private research repo).
 - `docs/ARCHITECTURE.md` rewritten for the regression system (classifier confined to a History section) with a Known Limitations section; `docs/METHODOLOGY.md` created; `docs/ML_FEATURE_GUIDE.md` rewritten from `FEATURE_COLUMNS`; `README_FEATURES.md` replaced with a pointer; stale docs archived to `docs/archive/` with banners.
 
 **Batch 6 — refactor, tests, remaining minors (fixed):**
@@ -111,35 +113,35 @@ Confirmed. Every quoted doc passage exists (ARCHITECTURE.md:48 binary classifier
 
 </details>
 
-### C5. Paper's '2016+ modern-era' dataset claim is false — the year filter in the code silently no-ops and models train on 1951-2025 data
+### C5. The MIN_YEAR=2016 'modern-era' filter silently no-ops — models trained on 1951–2025 data
 
-**Where:** `research/paper.tex:224`
+**Where:** `backend/nba_betting/ml/train_regression.py:150`
 
-**Evidence:** paper.tex:221-231 claims: 'restricting to seasons from 2016 onward to reflect modern-era play style, 1,120,817 records remain across 4,273 unique players' (abstract line 68: 'Trained on 1.1 million player-game observations spanning 2016--2024'). But backend/nba_betting/ml/train_regression.py:150-151 only applies the MIN_YEAR=2016 filter 'if "year" in df.columns', and data/raw/PlayerStatistics.csv has NO 'year' column (verified: header contains firstName..plusMinusPoints, no year). Empirical check: gameType + min>=10 filters alone (no year filter) yield exactly 1,120,817 rows spanning 1951-11-11 to 2025-06-22 with 4,273 unique players; only 230,900 rows are from Oct 2015 onward. data/models/model_metadata.json corroborates: split_date '2015-12-15' with train_rows 896,643 — i.e. the production 80/20 chronological split places 80% of training data before Dec 2015.
+**Evidence:** load_and_filter_csv applies the MIN_YEAR=2016 filter only `if "year" in df.columns`, and data/raw/PlayerStatistics.csv has NO 'year' column (verified: header contains firstName..plusMinusPoints, no year). Empirical check: gameType + min>=10 filters alone (no year filter) yield 1,120,817 rows spanning 1951-11-11 to 2025-06-22; only 230,900 rows are from Oct 2015 onward. data/models/model_metadata.json corroborates: split_date '2015-12-15' with train_rows 896,643 — i.e. the production 80/20 chronological split places 80% of training data before Dec 2015.
 
-**Why it matters:** Every published number (MAE table, betting ROI, SHAP importances, production model) was computed on ~74 years of data, 80% of it pre-2016, while the paper explicitly argues that including pre-2016 data 'risks introducing distribution mismatch'. The paper's own methodological rationale is contradicted by what the code actually did; the headline sample-size and era claims are unverifiable as stated and provably wrong as implemented.
+**Why it matters:** Every number this pipeline produced (MAE tables, betting ROI, SHAP importances, the production model) was computed on ~74 years of data, 80% of it pre-2016, while the documented rationale throughout the project was a modern-era (2016+) dataset chosen to avoid distribution mismatch. The headline sample-size and era claims were provably wrong as implemented; the research writeup was affected and has been corrected (tracked privately).
 
-**Fix:** In load_and_filter_csv, derive the season year from gameDateTimeEst (e.g. NBA season-start year) and apply the >=2016 filter unconditionally; re-run training, walk_forward_eval.py, betting_simulation.py and shap_analysis.py; or correct the paper to state the data actually spans 1951-2025.
+**Fix:** In load_and_filter_csv, derive the season year from gameDateTimeEst (e.g. NBA season-start year) and apply the >=2016 filter unconditionally; re-run training, walk_forward_eval.py, betting_simulation.py and shap_analysis.py.
 
 <details><summary>Verifier verdict</summary>
 
-Confirmed by direct code reading and empirical reproduction. (1) backend/nba_betting/ml/train_regression.py:150-151 applies the MIN_YEAR=2016 filter only `if "year" in df.columns`; the CSV header of data/raw/PlayerStatistics.csv (read directly) has no `year` column, so the filter silently no-ops. (2) Reproducing the pipeline's remaining filters (gameType in {Regular Season, Playoffs, Play-in Tournament} + numMinutes>=10) on the raw 1,648,656-row CSV yields exactly 1,120,817 rows and exactly 4,273 unique players — the precise figures paper.tex:221-226 attributes to the post-2016 dataset — spanning 1951-11-11 to 2025-06-22, with only 230,900 rows on/after 2015-10-01. (3) data/models/model_metadata.json (trained 2026-06-15) corroborates: train_rows 896,643 + test_rows 224,174 = 1,120,817, and split_date "2015-12-15"; time_split (train_regression.py:317-324) puts the split at the 80th-percentile date, and my reproduction of that percentile on the year-unfiltered data is exactly 2015-12-15 — arithmetically impossible if the data were 2016+. Hence paper.tex:224-225 ("restricting to seasons from 2016 onward... 1,120,817 records") and abstract line 68 ("spanning 2016--2024") are false: production models train on 1951-2025 data, with ~80% of training rows predating Dec 2015. All refutation attempts (alternate data path adding a year column, stale metadata, coincidental counts) failed.
+Confirmed by direct code reading and empirical reproduction: the filter no-ops exactly as described; reproducing the pipeline's remaining filters on the raw 1,648,656-row CSV yields exactly the row and player counts the pipeline actually used, spanning 1951–2025; and the 80th-percentile chronological split date of 2015-12-15 is arithmetically impossible on 2016+ data. All refutation attempts (alternate data path adding a year column, stale metadata, coincidental counts) failed. (Manuscript-specific detail redacted; see the private research repo.)
 
 </details>
 
-### C6. Paper's walk-forward fold definitions (Train 2016-2020 -> Test 2021, per season) do not match the code, which trains on 1951-2020 and slices test folds by calendar year
+### C6. Walk-forward folds trained on all-era data and sliced test folds by calendar year, not the documented NBA-season protocol
 
-**Where:** `research/paper.tex:349`
+**Where:** `backend/nba_betting/ml/train_regression.py:348`
 
-**Evidence:** paper.tex Table 2 (lines 341-355) states folds 'Train 2016--2020 / Test 2021' etc., and section 4.2 says the model 'is tested on the immediately following season only'. In train_regression.py:348-359, walk_forward_splits falls back to df['year'] = pd.to_datetime(df['date']).dt.year when no 'year' column exists (which is the case, see finding 1), then uses df[df['year'] < test_year] for train. So fold 1 actually trains on ALL data 1951-2020 and tests on calendar-year 2021 games — a slice mixing the end of the 2020-21 season and the start of the 2021-22 season, not a single NBA season.
+**Evidence:** walk_forward_splits falls back to df['year'] = pd.to_datetime(df['date']).dt.year when no 'year' column exists (always the case, see C5), then uses df[df['year'] < test_year] for train. So fold 1 actually trained on ALL data 1951-2020 and tested on calendar-year 2021 games — a slice mixing the end of the 2020-21 season and the start of the 2021-22 season, not a single NBA season.
 
-**Why it matters:** The temporal-generalization protocol described in the paper (season-aligned rolling-origin CV over a fixed 2016+ window) is not the protocol that produced Tables 3, 6 and the betting results (N=94,462 = 28,338+23,212+20,338+22,574 calendar-year rows). Reviewers/readers cannot reproduce the claimed folds from the described design.
+**Why it matters:** The documented temporal-generalization protocol (season-aligned rolling-origin CV over a fixed 2016+ window) was not the protocol that produced the walk-forward and betting results; the claimed folds could not be reproduced from the described design.
 
-**Fix:** Either implement true NBA-season folds (season-start-year from date) with the 2016 cutoff and re-run, or rewrite section 4.2/Table 2 to describe calendar-year folds over all-era training data.
+**Fix:** Implement true NBA-season folds (season-start-year from date) with the 2016 cutoff and re-run the research analyses.
 
 <details><summary>Verifier verdict</summary>
 
-CONFIRMED. (1) data/raw/PlayerStatistics.csv has no 'year' column (verified header), so the MIN_YEAR=2016 filter in load_and_filter_csv (train_regression.py:150-151) is silently skipped; running the actual function yields 1,120,817 rows spanning 1951-2025 with 898,896 rows before 2016. (2) walk_forward_splits (train_regression.py:348-358) falls back to calendar year from date and trains on df[year < test_year] with no lower bound, so fold 1 trains on 1,007,957 rows from 1951-2020, contradicting paper.tex:349 'Train 2016--2020'. (3) The 2021 test fold in research/results/walk_forward_predictions.csv spans 2021-01-02 to 2021-12-31 (months 1-7 and 10-12), mixing the end of the 2020-21 season with the start of 2021-22, contradicting paper.tex:338-339 'tested on the immediately following season only'. (4) The paper's reported fold sizes (28,338 for 2021, 20,338 for 2023; paper.tex:359-360) exactly match research/results/walk_forward_metrics.csv produced by research/walk_forward_eval.py via this exact code path, proving the published results came from the mismatched pipeline. The anomaly that 2021 is the largest fold is itself a fingerprint of calendar-year slicing (two partial seasons in one calendar year).
+CONFIRMED: the year-column fallback and the unbounded lower training window were verified in code (fold 1 trained on 1,007,957 rows from 1951-2020); the 2021 test fold in the pre-fix predictions spanned 2021-01-02 to 2021-12-31, mixing two NBA seasons; and the reported fold sizes exactly matched the outputs of this code path. The anomaly that 2021 was the largest fold is itself a fingerprint of calendar-year slicing (two partial seasons in one calendar year). (Manuscript-specific detail redacted; see the private research repo.)
 
 </details>
 
@@ -663,7 +665,7 @@ Verified. docs/ARCHITECTURE.md:215 states opp_pts_allowed_L10 falls back to leag
 
 **Where:** `docs/ARCHITECTURE.md:196`
 
-**Evidence:** ARCHITECTURE.md:196: 'days_rest | Days since previous game (NaN -> 3)'; paper.tex:249-250: 'days since the player's previous game, clipped at 10'. Training matches (train_regression.py:227-233: .fillna(3).clip(upper=10)). But inference features.py:81 does `float(latest.get("days_rest") or 2)` — Python truthiness turns a legitimate 0.0 (back-to-back game) into 2.0 — and _load_player_history (features.py:191) applies no upper clip, so long layoffs feed values >10 the model never saw in training.
+**Evidence:** ARCHITECTURE.md:196: 'days_rest | Days since previous game (NaN -> 3)'; the research feature docs additionally specify clipping at 10. Training matches (train_regression.py:227-233: .fillna(3).clip(upper=10)). But inference features.py:81 does `float(latest.get("days_rest") or 2)` — Python truthiness turns a legitimate 0.0 (back-to-back game) into 2.0 — and _load_player_history (features.py:191) applies no upper clip, so long layoffs feed values >10 the model never saw in training.
 
 **Why it matters:** Back-to-back games are exactly the rest condition the intelligence features (rest sensitivity, B2B splits) claim to analyze; at inference the model is silently told every B2B is a 2-day-rest game, contradicting both docs and training-time semantics.
 
@@ -671,73 +673,43 @@ Verified. docs/ARCHITECTURE.md:215 states opp_pts_allowed_L10 falls back to leag
 
 <details><summary>Verifier verdict</summary>
 
-Partially confirmed, and the confirmed half is the substantive defect. VERIFIED: docs/ARCHITECTURE.md:195 documents 'NaN -> 3' and research/paper.tex:249-250 documents 'clipped at 10'; training matches (ml/train_regression.py:227-233: .diff().dt.days.fillna(3).clip(upper=10)); but inference (services/features.py:191) computes days_rest with fillna(3) and NO upper clip, so long layoffs and season openers feed values >10 (often 30-150) that the model never saw in training — real train/serve skew and doc-vs-code contradiction. The truthiness pattern also exists at features.py:80 (`float(latest.get("days_rest") or 2)`), and the fallback of 2 mismatches the documented default of 3. REFUTED: the claimed back-to-back mechanism is wrong — a back-to-back yields diff().dt.days == 1 (truthy, passed through unchanged), not 0; days_rest can only be 0 for same-date duplicate rows, and NaN is already filled upstream (NaN is also truthy), so the `or 2` branch is effectively dead code. Finding should be restated as: missing .clip(upper=10) at features.py:191 (MAJOR skew) plus an inconsistent, near-dead `or 2` fallback at features.py:80 (MINOR); the '0-days back-to-back coerced to 2' scenario does not occur.
+Partially confirmed, and the confirmed half is the substantive defect. VERIFIED: docs/ARCHITECTURE.md:195 documents 'NaN -> 3' and the research feature docs specify 'clipped at 10'; training matches (ml/train_regression.py:227-233: .diff().dt.days.fillna(3).clip(upper=10)); but inference (services/features.py:191) computes days_rest with fillna(3) and NO upper clip, so long layoffs and season openers feed values >10 (often 30-150) that the model never saw in training — real train/serve skew and doc-vs-code contradiction. The truthiness pattern also exists at features.py:80 (`float(latest.get("days_rest") or 2)`), and the fallback of 2 mismatches the documented default of 3. REFUTED: the claimed back-to-back mechanism is wrong — a back-to-back yields diff().dt.days == 1 (truthy, passed through unchanged), not 0; days_rest can only be 0 for same-date duplicate rows, and NaN is already filled upstream (NaN is also truthy), so the `or 2` branch is effectively dead code. Finding should be restated as: missing .clip(upper=10) at features.py:191 (MAJOR skew) plus an inconsistent, near-dead `or 2` fallback at features.py:80 (MINOR); the '0-days back-to-back coerced to 2' scenario does not occur.
 
 </details>
 
-### M19. Paper claims ROI 'rises monotonically with threshold for all three statistics' against the L10 line; its own appendix and results CSV show rebounds ROI falling at tau=2.5
+### M19. Manuscript-internal inconsistency: an unqualified monotonicity claim contradicted by the manuscript's own appendix data
 
-**Where:** `research/paper.tex:621`
+**Where:** research manuscript (private repo)
 
-**Evidence:** paper.tex:621-623: 'Against the L10 line, ROI rises monotonically with threshold for all three statistics'. research/results/betting_summary.csv rows for reb/l10: tau=2.0 ROI +0.4163 (430 bets) -> tau=2.5 ROI +0.4051 (125 bets); the paper's own Appendix Table (lines 908-909) prints +0.416 then +0.405.
+Details redacted — this finding concerned the companion research manuscript and is tracked, unredacted, alongside it in the private research repo. Fixed 2026-07-03: the claim was qualified and the underlying results regenerated from the corrected pipeline.
 
-**Why it matters:** An overstated monotonicity claim is the kind of internal inconsistency a referee will catch immediately; it also feeds the narrative that edge concentrates at high thresholds.
+### M20. Manuscript-internal inconsistency: a table's stated inclusion criterion violated by one of its own rows, which fed a headline claim
 
-**Fix:** Soften to 'rises monotonically for points and assists; rebounds plateaus beyond tau=2.0 where N<200'.
+**Where:** research manuscript (private repo)
+
+Details redacted — this finding concerned the companion research manuscript and is tracked, unredacted, alongside it in the private research repo. Fixed 2026-07-03: headline claims restated against the corrected results with explicit small-sample framing.
+
+### M21. Contradictory data-provenance claims: training code comment says NBA API, ARCHITECTURE.md says Kaggle CSVs, and the research writeup named a third source
+
+**Where:** `ml/train_regression.py:8` / `docs/ARCHITECTURE.md:64`
+
+**Evidence:** ml/train_regression.py:8: 'Data source: data/raw/PlayerStatistics.csv (NBA API historical data)'. docs/ARCHITECTURE.md:64,154: 'Historical CSVs (Kaggle) — used for model training'. The research writeup named yet another source. The CSV schema (personId, gameDateTimeEst, reboundsTotal, ...) matches the Kaggle NBA historical dataset, not ESPN's API shape used elsewhere in the repo (ARCHITECTURE.md:345 documents ESPN stats-array indices), and ESPN data only reaches back ~60 days — it cannot produce a 1.6M-row multi-decade archive.
+
+**Why it matters:** Dataset provenance is a basic reproducibility requirement; the project told three different stories about where the training data comes from.
+
+**Fix:** State the actual source (the Kaggle-hosted, NBA-API-derived PlayerStatistics.csv) consistently in the code comment, ARCHITECTURE.md, and the research writeup.
 
 <details><summary>Verifier verdict</summary>
 
-Verified against source files. paper.tex:621-623 states verbatim that "Against the L10 line, ROI rises monotonically with threshold for all three statistics." The paper's own Appendix table (paper.tex:908-909, Rebounds/L10 block) shows ROI falling from +0.416 (tau=2.0, N=430, 74.2% win) to +0.405 (tau=2.5, N=125, 73.6% win), and research/results/betting_summary.csv lines 12-13 confirm the underlying values (0.4163 -> 0.4051). Points and assists rows are monotonic (assists only tabulated to tau=1.5), so the violation is exactly the rebounds tau=2.5 case as claimed. Refutation attempts (narrower reading of the sentence, table truncation) do not hold: the sentence is unqualified and cites the full range to tau=2.5. Severity MINOR: an overstated descriptive claim contradicted by the paper's own data, not a methodology flaw; fix is to qualify the sentence for rebounds where N drops to 125.
+CONFIRMED. All cited claims exist verbatim in the code comment and ARCHITECTURE.md; the CSV header and sibling files (Games.csv, Players.csv, TeamHistories.csv, ...) match the Kaggle historical-NBA-box-scores dataset layout exactly; the ESPN format used elsewhere in the repo is a positional stats array with ~60-day history and cannot be the source. The 'NBA API' and 'Kaggle' claims are potentially reconcilable (the Kaggle dataset is compiled from the NBA stats API), but the third provenance claim was unambiguously false. (Manuscript-specific detail redacted; see the private research repo.)
 
 </details>
 
-### M20. Paper Table 3 caption says 'Only thresholds with N >= 1,000 reported' but the table includes the Assists/LinReg row with N=793
+### M22. Manuscript-internal inconsistency: a stated break-even benchmark did not match the simulation's own ROI definition
 
-**Where:** `research/paper.tex:574`
+**Where:** research manuscript (private repo)
 
-**Evidence:** paper.tex:574 caption: 'Only thresholds with N >= 1,000 reported.' Line 593 in the same table: 'LinReg & 1.0 & 793 & +0.156' — and the abstract/conclusion (lines 731-732) cite this N=793 result as a headline ROI.
-
-**Why it matters:** The stated inclusion criterion is violated by the table itself, and the sub-threshold sample is the one used for a headline claim (+15.6% ROI on assists).
-
-**Fix:** Either drop the N=793 row per the caption or change the caption to describe the actual selection rule.
-
-<details><summary>Verifier verdict</summary>
-
-Verified in research/paper.tex: the Table 3 caption at line 574 states "Only thresholds with $N \geq 1{,}000$ reported," yet line 593 includes the Assists/LinReg row with N=793 (+0.156 ROI) — the only row violating the stated criterion. The N=793 result is cited in the body at line 642 ("+15.6% on assists ($N=793$)") and repeated as a headline ROI in the Conclusion at lines 731-732 ("AST: +15.6% at a 1-unit edge threshold"). Minor correction to the claimed evidence: the abstract (lines 78-82) cites only the points result (+13.1%, N=17,685), not the assists figure — the sub-threshold result is promoted in the conclusion only. The caveat at lines 648-650 about small samples does not resolve the caption/table contradiction. The finding stands as a real internal inconsistency.
-
-</details>
-
-### M21. Three contradictory data-provenance claims: paper says ESPN unofficial API, training code says NBA API, ARCHITECTURE says Kaggle CSVs
-
-**Where:** `research/paper.tex:222`
-
-**Evidence:** paper.tex:221-222: 'sourced from the ESPN unofficial public API'. ml/train_regression.py:8: 'Data source: data/raw/PlayerStatistics.csv (NBA API historical data)'. docs/ARCHITECTURE.md:64,154: 'Historical CSVs (Kaggle) — used for model training'. The CSV schema (personId, gameDateTimeEst, reboundsTotal, ...) matches the Kaggle NBA historical dataset, not ESPN's API shape used elsewhere in the repo (ARCHITECTURE.md:345 documents ESPN stats-array indices).
-
-**Why it matters:** Dataset provenance is a basic reproducibility requirement for the paper; a reader cannot obtain '1,648,656 records from the ESPN unofficial public API' as described.
-
-**Fix:** State the actual source (Kaggle/NBA-API-derived PlayerStatistics.csv) and its retrieval date in paper section 3.1 and align the code comment and ARCHITECTURE.md.
-
-<details><summary>Verifier verdict</summary>
-
-CONFIRMED. All three cited claims exist verbatim: (1) research/paper.tex:221-222 says the 1,648,656-record 1951-2025 dataset was "sourced from the ESPN unofficial public API"; (2) backend/nba_betting/ml/train_regression.py:8 says "Data source: data/raw/PlayerStatistics.csv (NBA API historical data)"; (3) docs/ARCHITECTURE.md:64 says "Historical CSVs (Kaggle) — used for model training only" and :154 says "historical NBA data from Kaggle CSVs". Refutation attempts failed: (a) I read the actual file header of data/raw/PlayerStatistics.csv — columns are firstName,lastName,personId,gameId,gameDateTimeEst,...,points,assists,...,reboundsDefensive..., and the sibling files (Games.csv, Players.csv, TeamHistories.csv, TeamStatistics.csv, LeagueSchedule*.csv) are exactly the Kaggle historical-NBA-box-scores dataset layout, not ESPN output; (b) train_regression.py:79,143,159,167 confirms training reads this exact CSV/schema; (c) the ESPN format used elsewhere in the repo is a positional stats array ([0]=MIN, [6]=REB, [13]=PTS per ARCHITECTURE.md:345) — a completely different shape; (d) ARCHITECTURE.md:344 states ESPN data "only goes back 60 days by default", so a 1951-2025 dataset cannot come from the repo's ESPN ingestion; (e) ARCHITECTURE.md:363 explicitly admits "current model was trained on Kaggle CSVs. Retraining on ESPN-sourced data would make features consistent between training and inference", directly contradicting the paper. One nuance: the "NBA API" (code comment) and "Kaggle" (docs) claims are potentially reconcilable if the Kaggle dataset was compiled from the NBA stats API, so the defect is at minimum a two-way contradiction; but the paper's ESPN provenance claim is unambiguously false per the repo's own code, data files, and docs. Severity: CRITICAL under the auditor rubric (a published paper claim about data provenance is invalidated by the implementation).
-
-</details>
-
-### M22. Paper's 'break-even ROI = -0.048' caption does not match the simulation's own ROI definition
-
-**Where:** `research/paper.tex:573`
-
-**Evidence:** paper.tex:573 caption: 'break-even ROI = -0.048 at -110 juice'. betting_simulation.py:54-56 pays +0.9091/-1.0 and defines roi = total_pnl/n_bets (line 102). Under that definition a bettor at the 52.38% break-even rate has ROI exactly 0, and a no-skill 50% bettor has ROI -0.0455; -0.048 (=-0.1/2.1) corresponds to a per-unit-risked convention not used anywhere in the code.
-
-**Why it matters:** It misstates the null benchmark readers compare the reported ROIs against, in a table whose entire point is distance from break-even.
-
-**Fix:** Change the caption to 'break-even ROI = 0; a no-skill (50%) bettor earns -0.045 under this payout' or switch the sim to a per-unit-risked ROI and say so.
-
-<details><summary>Verifier verdict</summary>
-
-Verified. paper.tex:573 caption states 'break-even ROI = -0.048 at -110 juice', but paper.tex:432-433 defines ROI as total profit / number of bets, and betting_simulation.py:54-56,89,101-102 implements exactly that (pnl = +0.9091 win / -1.0 loss; roi = total_pnl/n_bets). Under this definition break-even ROI is exactly 0 (at 52.38%: (11/21)(0.9091) - (10/21)(1.0) = 0), and a no-skill 50% bettor earns -0.0455. The value -0.048 (~ -1/21 = -0.0476, the -110 overround) does not correspond to any ROI convention in the code or the paper; no alternative computation exists in the repo (checked betting_simulation.py, _build_notebook.py, the notebook). Attempted refutation via the charitable 'random-bettor ROI' reading also fails since that yields -0.0455, not -0.048. Caption misstates the Table 5 profitability benchmark; correct fix is break-even ROI = 0 (coin-flip bettor ROI = -0.045).
-
-</details>
+Details redacted — this finding concerned the companion research manuscript and is tracked, unredacted, alongside it in the private research repo. Fixed 2026-07-03: under the simulation's per-unit-risked payout (+0.9091 win / −1.0 loss, roi = total_pnl/n_bets) break-even ROI is exactly 0 at the 52.38% win rate, and the benchmark is now stated that way everywhere.
 
 ## Assumptions to disclose in METHODOLOGY.md
 
@@ -775,11 +747,11 @@ Verified. paper.tex:573 caption states 'break-even ROI = -0.048 at -110 juice', 
 - Games within a player's history and within condition splits (rest, form) are treated as independent draws; serial correlation (the AR(1) phi the simulator itself estimates as nonzero) is ignored by every probability and quantile computation outside the simulator.
 - The MIN_YEAR=2016 'modern-era' filter is assumed to be active, but it only fires if the CSV has a 'year' column — data/raw/PlayerStatistics.csv has none, so all trained models, walk-forward results, betting simulations and SHAP analyses actually use 1951-2025 data (verified: 1,120,817 rows spanning 1951-11-11 to 2025-06-22; only 230,900 rows post-Oct-2015). METHODOLOGY.md must disclose the true training-era distribution or the pipeline must be fixed and everything re-run.
 - 'Season' means calendar year in training/research (walk_forward_splits derives year via date.dt.year; build_player_features uses the same for season_avg) but means an Oct-1-anchored NBA year at inference (services/features.py:234) and in the backtest (services/backtest.py:274) — season_avg_* and hot_cold_* features therefore have different semantics at train vs serve time.
-- XGBoost early stopping uses the evaluation fold itself as the validation set (train_regression.py:391-397, called with the test fold in walk_forward_eval.py:137 and with the 2024 explanation set in shap_analysis.py:106) — all reported XGBoost test MAEs and downstream betting ROIs are mildly optimistic; the paper discloses this in section 4.1 but METHODOLOGY.md should carry it too.
-- All betting-simulation results are against synthetic lines (L10 / EMA5 / linear-regression) computable from the same dataset, not sportsbook closing lines; ROI figures are relative benchmarks, not market profitability (paper discloses; README/ARCHITECTURE-level docs should too).
+- XGBoost early stopping uses the evaluation fold itself as the validation set (train_regression.py:391-397, called with the test fold in walk_forward_eval.py:137 and with the 2024 explanation set in shap_analysis.py:106) — all reported XGBoost test MAEs and downstream betting ROIs are mildly optimistic; METHODOLOGY.md should carry this disclosure.
+- All betting-simulation results are against synthetic lines (L10 / EMA5 / linear-regression) computable from the same dataset, not sportsbook closing lines; ROI figures are relative benchmarks, not market profitability — README/ARCHITECTURE-level docs should disclose this.
 - The backtest engine prices every historical game with the single production model, whose training window (through 2025 per model_metadata.json trained_at 2026-06-15) overlaps the backtested dates — in-sample backtests inflate hit rates fed to statistical_validation.py, edge_calibration.py and the predictability leaderboard.
 - statistical_validation.py's binomial, Spearman and t-tests treat one player's games as i.i.d. draws and run ~18 players x 3 stats without any multiple-comparisons correction; the 52.4% break-even reference assumes -110 pricing on both sides.
 - prob_over in ManualPredictionView (views.py:148-149) and generate_daily_picks assumes normally distributed outcomes with the noisy n<=10-game rolling std as dispersion, clamped to [0.01, 0.99]; services/probability.py's Poisson treatment for low-count stats is dead code (never called).
-- The paper's SHAP 'final model' (trained on data before calendar-2024) is not the shipped production model (trained on an 80/20 chronological split of all data through June 2025, split date 2015-12-15); feature-importance claims transfer to production only by assumption.
+- The research SHAP explanation model (trained on data before calendar-2024) is not the shipped production model (trained on an 80/20 chronological split of all data through June 2025, split date 2015-12-15); feature-importance claims transfer to production only by assumption.
 - docs/ARCHITECTURE.md describes the retired mvp-branch binary classifier; none of its quantitative claims (AUC 0.62-0.65, 17 features, ~3 seasons of training data) apply to the current system and it must not be cited as current methodology.
 - notebooks/feature_engineering.py (Holt trends, cv_l10, proj_volume, rest features) is an orphaned pipeline: none of its outputs are consumed by the trained models, despite README_FEATURES.md and docs/ML_FEATURE_GUIDE.md presenting it as the current feature pipeline.

@@ -272,7 +272,7 @@ This section is the heart of the document. It consolidates the assumption invent
 
 ### 8.6 Historical results
 
-Results generated **before the 2026-07-03 retrain** — including `research/paper.tex`, its result CSVs, and documents in `docs/archive/` — were produced by a pipeline with defects that have since been fixed: an inactive modern-era filter (models actually trained on 1951–2025 data), a calendar-year season boundary in training, early stopping on the test partition, opponent-defense totals computed from a different player universe than serving, and a NaN-std bug that reported 99% confidence for data-poor players. **Do not cite pre-2026-07-03 numbers as describing the current system.** The research scripts have not yet been re-run against the retrained models; until they are, the paper's quantitative claims should be considered superseded.
+Results generated **before the 2026-07-03 retrain** — including documents in `docs/archive/` and any previously circulated result exports — were produced by a pipeline with defects that have since been fixed: an inactive modern-era filter (models actually trained on 1951–2025 data), a calendar-year season boundary in training, early stopping on the test partition, opponent-defense totals computed from a different player universe than serving, and a NaN-std bug that reported 99% confidence for data-poor players. **Do not cite pre-2026-07-03 numbers as describing the current system.** The accompanying research analyses were re-run against the corrected pipeline on 2026-07-03.
 
 ---
 

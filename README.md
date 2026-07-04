@@ -185,7 +185,6 @@ nbaPropsPrediction/
 │           └── format.js           # Number/color formatters
 ├── docs/                           # ARCHITECTURE, METHODOLOGY, API docs, audit reports
 ├── notebooks/                      # methodology_walkthrough.ipynb
-├── research/                       # Walk-forward eval, betting sim, SHAP, paper
 ├── dags/                           # Airflow DAGs
 ├── docker-compose.yml
 ├── Dockerfile
