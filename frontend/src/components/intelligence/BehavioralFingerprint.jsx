@@ -4,191 +4,235 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
     ResponsiveContainer, Tooltip,
 } from 'recharts';
-import SectionCard from '../ui/SectionCard';
-import Skeleton from '../ui/Skeleton';
-import InsightText from '../ui/InsightText';
+import DetailBand from '../terminal/DetailBand';
+import { Eyebrow, Insight } from '../terminal/ui';
 import { C, fmt } from '../../utils/format';
 
 const ARCHETYPE_COLOR = {
-    'Consistent Workhorse':     C.green,
-    'Model-Friendly Pick':      C.green,
-    'Balanced All-Rounder':     C.indigo,
-    'Momentum Rider':           C.indigo,
-    'Matchup-Driven Player':    C.amber,
-    'Load-Sensitive Performer': C.amber,
-    'Boom/Bust Gamble':         C.red,
+    'Consistent Workhorse':     C.acid,
+    'Model-Friendly Pick':      C.acid,
+    'Balanced All-Rounder':     C.ink2,
+    'Momentum Rider':           C.ink2,
+    'Matchup-Driven Player':    C.cautionText,
+    'Load-Sensitive Performer': C.cautionText,
+    'Boom/Bust Gamble':         C.alert,
 };
 
 const SHAP_GROUP_LABELS = {
-    form:       'Recent Form',
+    form:       'Recent form',
     opponent:   'Opponent',
-    minutes:    'Minutes Load',
-    shooting:   'Shooting Eff.',
-    season_avg: 'Season Avg',
-    context:    'Game Context',
+    minutes:    'Minutes load',
+    shooting:   'Shooting eff.',
+    season_avg: 'Season avg',
+    context:    'Game context',
 };
 
 const DIM_LABELS = {
     consistency:         'Consistency',
-    edge_reliability:    'Edge Reliability',
-    matchup_sensitivity: 'Matchup Sens.',
-    form_dependence:     'Form Dep.',
-    rest_sensitivity:    'Rest Sens.',
+    edge_reliability:    'Edge reliability',
+    matchup_sensitivity: 'Matchup sens.',
+    form_dependence:     'Form dep.',
+    rest_sensitivity:    'Rest sens.',
 };
 
-function StrengthChip({ label, good }) {
-    const color = good ? C.green : C.red;
+const axis = { fontSize: 11, fill: 'var(--ink-8)', fontFamily: 'IBM Plex Mono' };
+
+function Tip({ active, payload, suffix = '' }) {
+    if (!active || !payload?.length) return null;
     return (
-        <span className="px-3 py-1 rounded-full text-xs font-medium inline-block mr-2 mb-2"
-            style={{ background: `${color}22`, color }}>
+        <div className="bg-popover border border-hair-control rounded-lg px-3 py-1.5">
+            <p className="num text-sm text-ink-1">
+                {fmt(payload[0].value, suffix ? 1 : 0)}{suffix}
+            </p>
+        </div>
+    );
+}
+
+function Chip({ label, good }) {
+    return (
+        <span
+            className="text-xs px-2.5 py-1 rounded"
+            style={
+                good
+                    ? { background: 'rgba(200,255,77,0.14)', color: C.acid }
+                    : { background: 'rgba(232,119,107,0.14)', color: C.alert }
+            }
+        >
             {good ? '▲' : '▼'} {label}
         </span>
     );
 }
 
-export default function BehavioralFingerprint({ data, loading, error, collapsible = false, defaultOpen = true }) {
-    const cardProps = { title: 'Behavioral Fingerprint', collapsible, defaultOpen };
-    if (loading) return <SectionCard {...cardProps}><Skeleton /></SectionCard>;
-    if (error)   return <SectionCard {...cardProps}><p className="text-sm text-red-400">{error}</p></SectionCard>;
-    if (!data)   return null;
+export default function BehavioralFingerprint({ id, data, loading, error }) {
+    const archetype = data?.archetype;
+    const archetypeColor = ARCHETYPE_COLOR[archetype] ?? C.ink3;
 
-    const {
-        archetype,
-        radar = [],
-        dimensions = {},
-        shap_group_importance = {},
-        shap_available = false,
-        strengths = [],
-        vulnerabilities = [],
-        betting_profile,
-        insight,
-    } = data;
+    const radar = data?.radar ?? [];
+    const dimensions = data?.dimensions ?? {};
+    const strengths = data?.strengths ?? [];
+    const vulnerabilities = data?.vulnerabilities ?? [];
 
-    const archetypeColor = ARCHETYPE_COLOR[archetype] ?? C.slate;
-
-    // Use backend-provided radar array; fall back to building from dimensions dict
     const radarData = radar.length > 0
-        ? radar.map(d => ({ ...d, fullMark: 100 }))
+        ? radar.map((d) => ({ ...d, fullMark: 100 }))
         : Object.entries(DIM_LABELS).map(([key, label]) => ({
             dimension: label,
             value: dimensions[key] ?? 0,
             fullMark: 100,
           }));
 
-    const shapEntries = Object.entries(shap_group_importance)
+    const shapEntries = Object.entries(data?.shap_group_importance ?? {})
         .filter(([, v]) => v > 0)
         .sort((a, b) => b[1] - a[1])
         .map(([key, val]) => ({ group: SHAP_GROUP_LABELS[key] ?? key, value: val }));
 
     return (
-        <SectionCard
-            title="Behavioral Fingerprint"
+        <DetailBand
+            id={id}
+            label="Behavioral fingerprint"
             subtitle="Five-dimension player profile for bet selection"
-            collapsible={collapsible}
-            defaultOpen={defaultOpen}
+            loading={loading}
+            error={error}
         >
-            {archetype && (
-                <div className="mb-6">
-                    <span className="px-4 py-1.5 rounded-full text-sm font-bold"
-                        style={{ background: `${archetypeColor}22`, color: archetypeColor }}>
-                        {archetype}
-                    </span>
-                </div>
-            )}
+            {!data ? null : (
+                <div className="flex flex-col gap-8">
+                    {archetype && (
+                        <div className="flex flex-col gap-1.5">
+                            <Eyebrow>Archetype</Eyebrow>
+                            <span
+                                className="text-[24px] font-semibold tracking-tightest leading-none"
+                                style={{ color: archetypeColor }}
+                            >
+                                {archetype}
+                            </span>
+                        </div>
+                    )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {radarData.length > 0 && (
-                    <ResponsiveContainer width="100%" height={280}>
-                        <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
-                            <PolarGrid stroke="rgba(255,255,255,0.12)" />
-                            <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 10, fill: C.slate }} />
-                            <Tooltip formatter={v => [fmt(v, 0), 'Score']} />
-                            <Radar
-                                name="Player"
-                                dataKey="value"
-                                stroke={archetypeColor}
-                                fill={archetypeColor}
-                                fillOpacity={0.25}
-                            />
-                        </RadarChart>
-                    </ResponsiveContainer>
-                )}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                        {radarData.length > 0 && (
+                            <ResponsiveContainer width="100%" height={260}>
+                                <RadarChart data={radarData} margin={{ top: 8, right: 28, left: 28, bottom: 8 }}>
+                                    <PolarGrid stroke="rgba(255,255,255,0.09)" />
+                                    <PolarAngleAxis
+                                        dataKey="dimension"
+                                        tick={{ fontSize: 11, fill: 'var(--ink-7)' }}
+                                    />
+                                    <Tooltip content={<Tip />} />
+                                    <Radar
+                                        name="Player"
+                                        dataKey="value"
+                                        stroke={archetypeColor}
+                                        fill={archetypeColor}
+                                        fillOpacity={0.18}
+                                    />
+                                </RadarChart>
+                            </ResponsiveContainer>
+                        )}
 
-                <div className="space-y-3">
-                    {Object.entries(dimensions).map(([key, score]) => (
-                        <div key={key}>
-                            <div className="flex justify-between text-xs mb-1">
-                                <span className="text-muted-foreground">{DIM_LABELS[key] ?? key}</span>
-                                <span className="text-foreground font-semibold">{fmt(score, 0)}</span>
-                            </div>
-                            <div className="h-1.5 rounded-full bg-border overflow-hidden">
+                        <div className="flex flex-col">
+                            {Object.entries(dimensions).map(([key, score], i, arr) => (
                                 <div
-                                    className="h-full rounded-full transition-all"
-                                    style={{
-                                        width: `${Math.min(score, 100)}%`,
-                                        background: score >= 65 ? C.green : score >= 40 ? C.amber : C.red,
-                                    }}
-                                />
-                            </div>
+                                    key={key}
+                                    className={`flex flex-col gap-2 py-3 ${
+                                        i === arr.length - 1 ? '' : 'border-b border-hair-row'
+                                    }`}
+                                >
+                                    <div className="flex justify-between items-baseline">
+                                        <span className="text-sm text-ink-3">{DIM_LABELS[key] ?? key}</span>
+                                        <span className="num text-sm font-medium text-ink-1">
+                                            {fmt(score, 0)}
+                                        </span>
+                                    </div>
+                                    <div className="h-1 bg-track">
+                                        <div
+                                            className="h-full motion-grow-x"
+                                            style={{
+                                                width: `${Math.min(score, 100)}%`,
+                                                background: score >= 65 ? C.acid : score >= 40 ? C.caution : C.alert,
+                                                '--motion-delay': `${i * 50}ms`,
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
-            </div>
-
-            {shapEntries.length > 0 && (
-                <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3">
-                        <p className="text-xs font-semibold text-muted-foreground">XGBoost feature group importance (SHAP)</p>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium"
-                            style={{ background: `${C.indigo}22`, color: C.indigo }}>
-                            SHAP
-                        </span>
                     </div>
-                    <ResponsiveContainer width="100%" height={160}>
-                        <BarChart data={shapEntries} layout="vertical" margin={{ top: 0, right: 40, left: 80, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" horizontal={false} />
-                            <XAxis type="number" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10, fill: C.slate }} domain={[0, 100]} />
-                            <YAxis type="category" dataKey="group" tick={{ fontSize: 10, fill: C.slate }} width={80} />
-                            <Tooltip formatter={v => [`${Number(v).toFixed(1)}%`, 'Contribution']} />
-                            <Bar dataKey="value" fill={C.indigo} radius={[0, 3, 3, 0]} fillOpacity={0.8} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-            )}
 
-            {!shap_available && (
-                <p className="text-[10px] text-muted-foreground mb-4">
-                    SHAP attribution unavailable — dimension scores are heuristic-based.
-                </p>
-            )}
-
-            {(strengths.length > 0 || vulnerabilities.length > 0) && (
-                <div className="mb-4">
-                    {strengths.length > 0 && (
-                        <div className="mb-3">
-                            <p className="text-xs font-semibold text-muted-foreground mb-2">Strengths</p>
-                            <div>{strengths.map((s, i) => <StrengthChip key={i} label={s} good />)}</div>
+                    {shapEntries.length > 0 && (
+                        <div className="flex flex-col gap-3">
+                            <Eyebrow wide>XGBoost feature group importance (SHAP)</Eyebrow>
+                            <ResponsiveContainer width="100%" height={170}>
+                                <BarChart
+                                    data={shapEntries}
+                                    layout="vertical"
+                                    margin={{ top: 0, right: 32, left: 8, bottom: 0 }}
+                                >
+                                    <CartesianGrid horizontal={false} stroke="rgba(255,255,255,0.05)" />
+                                    <XAxis
+                                        type="number"
+                                        tickFormatter={(v) => `${v.toFixed(0)}%`}
+                                        tick={axis}
+                                        tickLine={false}
+                                        axisLine={{ stroke: 'var(--hair-rule)' }}
+                                        domain={[0, 100]}
+                                    />
+                                    <YAxis
+                                        type="category"
+                                        dataKey="group"
+                                        tick={{ fontSize: 12, fill: 'var(--ink-5)' }}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        width={104}
+                                    />
+                                    <Tooltip content={<Tip suffix="%" />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                                    <Bar
+                                        dataKey="value"
+                                        fill="rgba(200,255,77,0.55)"
+                                        radius={[0, 2, 2, 0]}
+                                        animationDuration={500}
+                                        animationEasing="ease-out"
+                                    />
+                                </BarChart>
+                            </ResponsiveContainer>
                         </div>
                     )}
-                    {vulnerabilities.length > 0 && (
-                        <div>
-                            <p className="text-xs font-semibold text-muted-foreground mb-2">Vulnerabilities</p>
-                            <div>{vulnerabilities.map((v, i) => <StrengthChip key={i} label={v} good={false} />)}</div>
+
+                    {!data.shap_available && (
+                        <p className="text-xs text-ink-8">
+                            SHAP attribution unavailable — dimension scores are heuristic-based.
+                        </p>
+                    )}
+
+                    {(strengths.length > 0 || vulnerabilities.length > 0) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            {strengths.length > 0 && (
+                                <div className="flex flex-col gap-2.5">
+                                    <Eyebrow>Strengths</Eyebrow>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {strengths.map((s) => <Chip key={s} label={s} good />)}
+                                    </div>
+                                </div>
+                            )}
+                            {vulnerabilities.length > 0 && (
+                                <div className="flex flex-col gap-2.5">
+                                    <Eyebrow>Vulnerabilities</Eyebrow>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {vulnerabilities.map((v) => <Chip key={v} label={v} good={false} />)}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
+
+                    {data.betting_profile && (
+                        <div className="flex flex-col gap-2 pt-5 border-t border-hair">
+                            <Eyebrow>Betting profile</Eyebrow>
+                            <Insight text={data.betting_profile} className="text-[15px] text-ink-2" />
+                        </div>
+                    )}
+
+                    <Insight text={data.insight} />
                 </div>
             )}
-
-            {betting_profile && (
-                <div className="bg-background/60 border border-border rounded-xl px-4 py-3 mb-4 text-sm text-foreground">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Betting profile</p>
-                    <p dangerouslySetInnerHTML={{
-                        __html: betting_profile.replace(/\*\*(.*?)\*\*/g, '<strong class="text-foreground">$1</strong>'),
-                    }} />
-                </div>
-            )}
-
-            <InsightText text={insight} />
-        </SectionCard>
+        </DetailBand>
     );
 }
