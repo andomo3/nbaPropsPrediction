@@ -1,13 +1,14 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import TextType from './TextType';
 import TeamSection from './TeamSection';
-import HowItWorks from './HowItWorks';
 import { FadeIn, PageTransition } from './page-transition';
 
 const AboutUs = () => {
     return (
         <PageTransition>
-            <div>
+            {/* The shell is full-bleed now, so this page carries its own gutter. */}
+            <div className="px-5 sm:px-gutter pt-16 pb-8">
                 <FadeIn direction="none">
                     <div className="text-center mb-20 md:mb-28 max-w-4xl mx-auto">
                         <TextType
@@ -52,7 +53,14 @@ const AboutUs = () => {
                 </FadeIn>
 
                 <FadeIn delay={250}>
-                    <HowItWorks />
+                    <div className="flex justify-center mb-20 md:mb-24">
+                        <Link
+                            to="/overview"
+                            className="text-[15px] text-ink-3 hover:text-acid transition-colors"
+                        >
+                            How the model works, step by step →
+                        </Link>
+                    </div>
                 </FadeIn>
 
                 <FadeIn delay={350}>

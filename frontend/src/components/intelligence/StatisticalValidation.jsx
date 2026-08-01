@@ -1,32 +1,26 @@
 import React from 'react';
-import SectionCard from '../ui/SectionCard';
-import Skeleton from '../ui/Skeleton';
-import InsightText from '../ui/InsightText';
+import DetailBand from '../terminal/DetailBand';
+import { Eyebrow, Insight } from '../terminal/ui';
 import { C, pct, fmt } from '../../utils/format';
 
-const VERDICT_COLOR = {
-    'Strong signal':       C.green,
-    'Moderate signal':     C.amber,
-    'Weak signal':         C.red,
-    'No reliable signal':  C.red,
-    'Insufficient data':   C.slate,
-};
-
-function StatRow({ label, value, sublabel, color, pValue, significant }) {
+function TestRow({ label, sublabel, value, color, pValue, significant, last }) {
     return (
-        <div className="flex items-start justify-between py-3 border-b border-border/40 last:border-0">
-            <div>
-                <p className="text-sm text-foreground font-medium">{label}</p>
-                {sublabel && <p className="text-xs text-muted-foreground mt-0.5">{sublabel}</p>}
+        <div
+            className={`grid grid-cols-[1fr_auto] gap-6 items-start py-3.5 ${
+                last ? '' : 'border-b border-hair-row'
+            }`}
+        >
+            <div className="min-w-0">
+                <p className="text-sm text-ink-2">{label}</p>
+                {sublabel && <p className="text-xs text-ink-7 mt-0.5">{sublabel}</p>}
             </div>
-            <div className="text-right ml-4 flex-shrink-0">
-                <p className="text-sm font-bold" style={{ color }}>{value}</p>
+            <div className="text-right shrink-0">
+                <p className="num text-[15px] font-medium" style={{ color }}>{value}</p>
                 {pValue != null && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                        p = {pValue < 0.001 ? '<0.001' : Number(pValue).toFixed(3)}
-                        {' '}
-                        <span style={{ color: significant ? C.green : C.slate }}>
-                            {significant ? '✓ sig.' : '✗ n.s.'}
+                    <p className="num text-[11px] text-ink-8 mt-0.5">
+                        p = {pValue < 0.001 ? '<0.001' : Number(pValue).toFixed(3)}{' '}
+                        <span style={{ color: significant ? C.acid : C.ink8 }}>
+                            {significant ? 'sig.' : 'n.s.'}
                         </span>
                     </p>
                 )}
@@ -35,123 +29,90 @@ function StatRow({ label, value, sublabel, color, pValue, significant }) {
     );
 }
 
-function AdequacyBadge({ adequate, warnings }) {
-    if (adequate && warnings.length === 0) return null;
-    return (
-        <div className="mb-4 space-y-1.5">
-            {warnings.map((w, i) => (
-                <div key={i} className="flex items-start gap-2 px-3 py-2 rounded-lg text-xs"
-                    style={{ background: `${C.amber}15`, color: C.amber }}>
-                    <span className="flex-shrink-0 mt-0.5">⚠</span>
-                    <span>{w}</span>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-export default function StatisticalValidation({ data, loading, error }) {
-    if (loading) return <SectionCard title="Statistical Validation"><Skeleton /></SectionCard>;
-    if (error)   return <SectionCard title="Statistical Validation"><p className="text-sm text-red-400">{error}</p></SectionCard>;
-    if (!data)   return null;
-
-    const {
-        n_games,
-        verdict,
-        verdict_color,
-        hit_rate = {},
-        edge_correlation = {},
-        calibration = {},
-        sample_adequacy = {},
-        disclosures = [],
-        insight,
-    } = data;
-
-    const vColor = VERDICT_COLOR[verdict] ?? C.slate;
+export default function StatisticalValidation({ id, data, loading, error }) {
+    const hitRate = data?.hit_rate ?? {};
+    const correlation = data?.edge_correlation ?? {};
+    const calibration = data?.calibration ?? {};
+    const warnings = data?.sample_adequacy?.warnings ?? [];
+    const disclosures = data?.disclosures ?? [];
 
     return (
-        <SectionCard
-            title="Statistical Validation"
+        <DetailBand
+            id={id}
+            label="Statistical validation"
             subtitle="Are these results trustworthy, or plausible noise?"
+            loading={loading}
+            error={error}
         >
-            {/* Verdict banner */}
-            <div className="flex items-center gap-4 mb-6 px-4 py-3 rounded-xl border"
-                style={{ background: `${vColor}12`, borderColor: `${vColor}40` }}>
-                <div className="flex-1">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Overall verdict</p>
-                    <p className="text-lg font-bold" style={{ color: vColor }}>{verdict}</p>
+            {!data ? null : (
+                <div className="flex flex-col gap-7">
+                    {warnings.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            {warnings.map((w, i) => (
+                                <p
+                                    key={i}
+                                    className="text-[13px] leading-[1.5] pl-3 border-l-2"
+                                    style={{ borderColor: C.caution, color: C.cautionText }}
+                                >
+                                    {w}
+                                </p>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="flex flex-col">
+                        <TestRow
+                            label="Hit rate vs break-even"
+                            sublabel={`${hitRate.hits} correct of ${hitRate.n} — break-even is 52.4%`}
+                            value={pct(hitRate.value)}
+                            color={hitRate.significant ? C.acid : C.cautionText}
+                            pValue={hitRate.p_value}
+                            significant={hitRate.significant}
+                        />
+                        <TestRow
+                            label="Edge–outcome correlation"
+                            sublabel={
+                                correlation.rho != null
+                                    ? `Spearman ρ = ${fmt(correlation.rho, 2)} — does a bigger edge mean more hits?`
+                                    : 'Insufficient data for the correlation test'
+                            }
+                            value={correlation.label}
+                            color={
+                                correlation.significant ? C.acid
+                                : correlation.rho != null ? C.cautionText
+                                : C.ink8
+                            }
+                            pValue={correlation.p_value}
+                            significant={correlation.significant}
+                        />
+                        <TestRow
+                            last
+                            label="Projection bias"
+                            sublabel={`Mean error ${calibration.mean_error >= 0 ? '+' : '−'}${fmt(Math.abs(calibration.mean_error))} — model ${calibration.direction}`}
+                            value={calibration.label}
+                            color={calibration.significant ? C.alert : C.acid}
+                            pValue={calibration.p_value}
+                            significant={calibration.significant}
+                        />
+                    </div>
+
+                    <Insight text={data.insight} />
+
+                    {disclosures.length > 0 && (
+                        <div className="flex flex-col gap-2.5 pt-5 border-t border-hair">
+                            <Eyebrow>Methodology notes &amp; limitations ({disclosures.length})</Eyebrow>
+                            <ul className="flex flex-col gap-1.5">
+                                {disclosures.map((d, i) => (
+                                    <li key={i} className="text-[13px] leading-[1.55] text-ink-6 pl-4 relative">
+                                        <span className="absolute left-0 text-ink-9">·</span>
+                                        {d}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
-                <div className="text-right">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Sample</p>
-                    <p className="text-lg font-bold text-foreground">{n_games} games</p>
-                </div>
-            </div>
-
-            {/* Sample warnings */}
-            <AdequacyBadge
-                adequate={sample_adequacy.adequate}
-                warnings={sample_adequacy.warnings ?? []}
-            />
-
-            {/* Test results */}
-            <div className="mb-4">
-                <StatRow
-                    label="Hit rate vs break-even"
-                    sublabel={`${hit_rate.hits} correct out of ${hit_rate.n} — break-even is 52.4%`}
-                    value={pct(hit_rate.value)}
-                    color={hit_rate.significant ? C.green : C.red}
-                    pValue={hit_rate.p_value}
-                    significant={hit_rate.significant}
-                />
-                <StatRow
-                    label="Edge–outcome correlation"
-                    sublabel={
-                        edge_correlation.rho != null
-                            ? `Spearman ρ = ${fmt(edge_correlation.rho, 2)} — does bigger edge → more hits?`
-                            : 'Insufficient data for correlation test'
-                    }
-                    value={edge_correlation.label}
-                    color={
-                        edge_correlation.significant ? C.green
-                        : edge_correlation.rho != null ? C.red
-                        : C.slate
-                    }
-                    pValue={edge_correlation.p_value}
-                    significant={edge_correlation.significant}
-                />
-                <StatRow
-                    label="Projection bias"
-                    sublabel={`Mean error ${calibration.mean_error >= 0 ? '+' : ''}${fmt(calibration.mean_error)} — model ${calibration.direction}`}
-                    value={calibration.label}
-                    color={calibration.significant ? C.red : C.green}
-                    pValue={calibration.p_value}
-                    significant={calibration.significant}
-                />
-            </div>
-
-            {/* Legend */}
-            <p className="text-[10px] text-muted-foreground mb-4">
-                sig. = statistically significant at α = 0.05 · n.s. = not significant
-            </p>
-
-            <InsightText text={insight} />
-
-            {/* Standing methodological caveats — these hold for every panel,
-                not just small samples */}
-            {disclosures.length > 0 && (
-                <details className="mt-4 group">
-                    <summary className="text-xs text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors">
-                        Methodology notes &amp; limitations ({disclosures.length})
-                    </summary>
-                    <ul className="mt-2 space-y-1.5 pl-4 list-disc marker:text-muted-foreground/50">
-                        {disclosures.map((d, i) => (
-                            <li key={i} className="text-xs text-muted-foreground leading-relaxed">
-                                {d}
-                            </li>
-                        ))}
-                    </ul>
-                </details>
             )}
-        </SectionCard>
+        </DetailBand>
     );
 }

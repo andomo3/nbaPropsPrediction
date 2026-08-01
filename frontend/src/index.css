@@ -1,78 +1,132 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Terminal design system.
+
+   One accent (acid lime) reserved for the single best value in a group.
+   Amber means caution, red means genuinely negative, everything else is an
+   ink-ramp grey. Surfaces are separated by hairlines, never by cards, borders
+   or shadows. Every number is set in IBM Plex Mono.
+   ──────────────────────────────────────────────────────────────────────────── */
+
 @layer base {
   :root {
-    /* Backgrounds — dark warm charcoal (not cold navy) */
-    --background: oklch(0.08 0.007 50);
-    --foreground: oklch(0.95 0.007 80);
-    --card: oklch(0.12 0.009 50);
+    /* Ink ramp — 0 is brightest, 9 is faintest */
+    --ink-0: #F7F7F5;
+    --ink-1: #F4F4F2;
+    --ink-2: #EDEDEA;
+    --ink-3: #C7C7CC;
+    --ink-4: #9A9AA2;
+    --ink-5: #8C8C93;
+    --ink-6: #83838B;
+    --ink-7: #7B7B83;
+    --ink-8: #6E6E76;
+    --ink-9: #5E5E66;
 
-    /* Primary — indigo, bright for dark surfaces */
-    --primary: oklch(0.65 0.2 264);
-    --primary-foreground: oklch(0.08 0.007 50);
+    /* Signal colours */
+    --acid: #C8FF4D;          /* best-in-group, positive verdict */
+    --acid-ink: #12140A;      /* text on an acid fill */
+    --acid-soft: rgba(200, 255, 77, 0.32);
+    --acid-wash: rgba(200, 255, 77, 0.06);
+    --caution: #F4C87A;       /* caution, as text */
+    --caution-solid: #E8A33D; /* caution, as a fill or dot */
+    --alert: #E8776B;         /* genuinely negative */
 
-    /* Secondary surfaces */
-    --secondary: oklch(0.16 0.009 50);
-    --secondary-foreground: oklch(0.95 0.007 80);
+    /* Hairlines — the only structural device in the system */
+    --hair: rgba(255, 255, 255, 0.07);
+    --hair-soft: rgba(255, 255, 255, 0.05);
+    --hair-row: rgba(255, 255, 255, 0.06);
+    --hair-rule: rgba(255, 255, 255, 0.09);
+    --hair-control: rgba(255, 255, 255, 0.10);
+    --track: rgba(255, 255, 255, 0.07);
 
-    /* Borders, inputs, muted */
-    --muted: oklch(0.16 0.009 50);
-    --muted-foreground: oklch(0.55 0.008 60);
-    --border: oklch(0.22 0.012 50);
-    --input: oklch(0.16 0.009 50);
+    /* Semantic tokens — consumed by Tailwind and by pre-redesign components */
+    --background: #0A0A0B;
+    --foreground: var(--ink-1);
+    --card: #0A0A0B;
+    --popover: #131315;
+    --popover-foreground: var(--ink-1);
 
-    /* Accent */
-    --accent: oklch(0.16 0.009 50);
-    --accent-foreground: oklch(0.95 0.007 80);
+    --primary: var(--acid);
+    --primary-foreground: var(--acid-ink);
+    --secondary: #141416;
+    --secondary-foreground: var(--ink-1);
 
-    /* Semantic */
-    --destructive: oklch(0.62 0.22 25);
-    --destructive-foreground: oklch(0.95 0.007 80);
-    --ring: oklch(0.65 0.2 264);
+    --muted: #141416;
+    --muted-foreground: var(--ink-5);
+    --accent: #141416;
+    --accent-foreground: var(--ink-1);
+    --border: var(--hair);
+    --input: #131315;
+    --ring: var(--acid);
 
-    /* Popovers */
-    --popover: oklch(0.12 0.009 50);
-    --popover-foreground: oklch(0.95 0.007 80);
+    --destructive: var(--alert);
+    --destructive-foreground: var(--ink-1);
 
-    /* Chart palette — calibrated for dark backgrounds */
-    --chart-1: oklch(0.65 0.2 264);   /* indigo */
-    --chart-2: oklch(0.62 0.16 220);  /* blue */
-    --chart-3: oklch(0.65 0.18 165);  /* teal */
-    --chart-4: oklch(0.65 0.22 25);   /* red/orange */
+    /* Chart palette — same three signals, so charts read like the tables do */
+    --chart-1: var(--acid);
+    --chart-2: var(--ink-3);
+    --chart-3: var(--caution-solid);
+    --chart-4: var(--alert);
 
-    --radius: 0.5rem;
+    /* Terminal geometry */
+    --nav-h: 68px;
+    --gutter: 64px;
+    --radius: 6px;
   }
 
   * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    border-color: var(--hair);
   }
 
   body {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: var(--background);
     color: var(--foreground);
     overflow-x: hidden;
-  }
-
-  * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground;
+    font-variant-numeric: tabular-nums;
   }
 }
 
-/* Scrollbar */
+@layer components {
+  /* A monospaced figure. Every number in the product uses this. */
+  .num {
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+
+  /* Small caps-ish label: the only place letterspacing is used. */
+  .eyebrow {
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+    font-weight: 500;
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-8);
+  }
+
+  /* Horizontal scroll container for dense tables on narrow viewports. */
+  .table-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Scrollbar — thin and unobtrusive, matching the hairline language */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -80,38 +134,122 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.25 0.012 50);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.32 0.015 50);
+  background: rgba(255, 255, 255, 0.22);
 }
 
-/* Hero typewriter cursor */
-@keyframes hero-blink {
-  0%, 100% { opacity: 0.6; }
-  50%       { opacity: 0; }
-}
-.hero-cursor        { opacity: 0.6; }
-.hero-cursor-blink  { animation: hero-blink 1s step-start infinite; }
-
-/* Respect reduced-motion: freeze decorative animation, keep content visible */
-@media (prefers-reduced-motion: reduce) {
-  .hero-cursor-blink,
-  .text-type__cursor,
-  .animate-expand {
-    animation: none !important;
-  }
-  .animate-expand { width: 100%; }
-  *, *::before, *::after {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-  }
+/* Focus ring — visible for keyboard users, silent for pointer users */
+:focus-visible {
+  outline: 2px solid var(--acid);
+  outline-offset: 2px;
 }
 
-/* Utility animations */
+/* ─────────────────────────────────────────────────────────────────────────────
+   Motion.
+
+   Motion here reveals structure; it never decorates. Three rules:
+     1. Fast — 140-320ms. This is a dense terminal, not a landing page.
+     2. Short — nothing travels more than 8px.
+     3. Figures never animate their value. A number counting up is unreadable
+        mid-flight and, in a stats product, briefly wrong.
+
+   Every rule below is disabled under prefers-reduced-motion.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-io: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.28s var(--ease-out) both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.18s var(--ease-out) both;
+}
+
+/*
+ * Every page renders a flat list of bands into <main>, so the page assembles
+ * top-to-bottom on entry without a single call site opting in. Capped at eight
+ * steps — past that the wait costs more than the cue is worth.
+ */
+main > * {
+  animation: rise 0.32s var(--ease-out) both;
+}
+main > *:nth-child(1) { animation-delay: 0ms; }
+main > *:nth-child(2) { animation-delay: 45ms; }
+main > *:nth-child(3) { animation-delay: 90ms; }
+main > *:nth-child(4) { animation-delay: 130ms; }
+main > *:nth-child(5) { animation-delay: 165ms; }
+main > *:nth-child(6) { animation-delay: 195ms; }
+main > *:nth-child(7) { animation-delay: 220ms; }
+main > *:nth-child(n + 8) { animation-delay: 240ms; }
+
+/* A band assembling on entry. Stagger via --motion-delay. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.motion-rise {
+  animation: rise 0.32s var(--ease-out) both;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+/* A magnitude drawing itself in — bars, meters, ranges. */
+@keyframes growX {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.motion-grow-x {
+  transform-origin: left center;
+  animation: growX 0.42s var(--ease-out) both;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+@keyframes growY {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+.motion-grow-y {
+  transform-origin: bottom center;
+  animation: growY 0.5s var(--ease-out) both;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+/* Collapsible body: animates without measuring, via grid row sizing. */
+.motion-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s var(--ease-io);
+}
+
+.motion-collapse[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+
+.motion-collapse > * {
+  overflow: hidden;
+  min-height: 0;
+}
+
 @keyframes expand {
   0%   { width: 0; }
   100% { width: 100%; }
@@ -119,11 +257,6 @@
 
 .animate-expand {
   animation: expand var(--expand-duration, 3s) ease-out forwards;
-}
-
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes spin {
@@ -138,4 +271,28 @@
 @keyframes bounce {
   0%, 100% { transform: translateY(0); }
   50%       { transform: translateY(-4px); }
+}
+
+/* Respect reduced-motion: freeze every reveal, keep the content it revealed */
+@media (prefers-reduced-motion: reduce) {
+  .animate-expand,
+  .animate-fade-up,
+  .motion-rise,
+  .motion-grow-x,
+  .motion-grow-y,
+  .text-type__cursor {
+    animation: none !important;
+  }
+  .animate-expand { width: 100%; }
+  main > * { animation: none !important; opacity: 1 !important; transform: none !important; }
+  /* Whatever the animation would have revealed must end up visible. */
+  .motion-rise { opacity: 1 !important; transform: none !important; }
+  .motion-grow-x,
+  .motion-grow-y { transform: none !important; }
+  .motion-collapse { transition: none !important; }
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

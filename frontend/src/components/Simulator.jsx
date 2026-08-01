@@ -1,406 +1,350 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-    ComposedChart,
-    Area,
-    Line,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ReferenceLine,
-    ResponsiveContainer,
-    Legend,
+    ComposedChart, Area, Line, XAxis, YAxis,
+    CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from './ui/select';
-
+    Band, Eyebrow, FootNotes, GhostSelect, GUTTER,
+    PageHead, Prose, StateBlock, Tabs,
+} from './terminal/ui';
+import useFetch from './terminal/useFetch';
 import { PLAYERS, STATS, API_BASE } from '../utils/constants';
+import { C, fmt } from '../utils/format';
 
 const STAT_UNITS = { pts: 'pts', reb: 'reb', ast: 'ast' };
+const PATHS = 1000;
 
-// ── Custom Tooltip ─────────────────────────────────────────────────────────────
+const STAT_TABS = STATS.map((s) => ({ value: s.key, label: s.label }));
+const PLAYER_OPTIONS = PLAYERS.map((p) => ({ value: p, label: p }));
+
+const axis = { fontSize: 11, fill: 'var(--ink-8)', fontFamily: 'IBM Plex Mono' };
+
+/** How a φ close to zero should be read, in words. */
+function phiReading(phi) {
+    if (phi > 0.15) return 'hot and cold streaks persist';
+    if (phi > 0.1) return 'mild momentum';
+    if (phi < -0.1) return 'strong mean reversion';
+    return 'near-random game-to-game variation';
+}
+
 function FanTooltip({ active, payload, label, stat }) {
     if (!active || !payload?.length) return null;
-
-    const entry = payload[0]?.payload ?? {};
-    const isActual = entry.isActual;
+    const d = payload[0]?.payload ?? {};
 
     return (
-        <div className="bg-popover border border-border rounded-xl px-4 py-3 text-sm shadow-lg min-w-[160px]">
-            <p className="font-semibold text-foreground mb-1">Game {label}</p>
-            {isActual ? (
-                <p className="text-foreground">
-                    Actual: <span className="font-bold">{entry.actual} {STAT_UNITS[stat]}</span>
+        <div className="bg-popover border border-hair-control rounded-lg px-3 py-2 min-w-[150px]">
+            <p className="num text-[11px] tracking-eyebrow uppercase text-ink-8 mb-1.5">
+                Game {label}
+            </p>
+            {d.isActual ? (
+                <p className="text-sm text-ink-5">
+                    Actual{' '}
+                    <span className="num font-medium" style={{ color: C.acid }}>
+                        {d.actual} {STAT_UNITS[stat]}
+                    </span>
                 </p>
             ) : (
-                <>
-                    <p className="text-muted-foreground text-xs mb-1">Projected range</p>
-                    <div className="flex flex-col gap-0.5">
-                        <span className="text-foreground/80">90th: <b>{entry.p90}</b></span>
-                        <span className="text-foreground/80">75th: <b>{entry.p75}</b></span>
-                        <span className="text-primary font-bold">Median: {entry.p50}</span>
-                        <span className="text-foreground/80">25th: <b>{entry.p25}</b></span>
-                        <span className="text-foreground/80">10th: <b>{entry.p10}</b></span>
-                    </div>
-                </>
+                <div className="flex flex-col gap-0.5">
+                    {[['p90', d.p90], ['p75', d.p75], ['p50', d.p50], ['p25', d.p25], ['p10', d.p10]].map(
+                        ([k, v]) => (
+                            <p key={k} className="text-xs text-ink-5 flex justify-between gap-4">
+                                <span className="num">{k}</span>
+                                <span
+                                    className="num"
+                                    style={{ color: k === 'p50' ? C.ink0 : C.ink3, fontWeight: k === 'p50' ? 500 : 400 }}
+                                >
+                                    {fmt(v)}
+                                </span>
+                            </p>
+                        ),
+                    )}
+                </div>
             )}
-            {entry.opponent && (
-                <p className="text-xs text-muted-foreground mt-1">vs {entry.opponent}</p>
-            )}
+            {d.opponent && <p className="text-xs text-ink-8 mt-1.5">vs {d.opponent}</p>}
         </div>
     );
 }
 
-// ── Prop Table ─────────────────────────────────────────────────────────────────
+/**
+ * Simulated probability of clearing each line. The accent marks the single
+ * strongest lean in the table; anything inside a few points of a coin flip is
+ * greyed out, because that is what it is.
+ */
 function PropTable({ propTable, seasonAvg, stat }) {
     if (!propTable?.length) return null;
 
+    const lean = (p) => Math.abs(p * 100 - 50);
+    const strongest = Math.max(...propTable.map((r) => lean(r.prob_over)));
+
     return (
-        <div className="bg-card border border-border rounded-2xl p-6">
-            <h3 className="text-base font-semibold text-foreground mb-4">
-                Prop Probability Table
-            </h3>
-            <p className="text-xs text-muted-foreground mb-4">
-                Simulated probability of going <strong>over</strong> each line in the next 20 games.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
+        <Band className="py-12">
+            <Eyebrow section>Prop probability</Eyebrow>
+            <Prose size="wide" className="mt-4 text-ink-6">
+                Simulated probability of going over each line across the next 20 games, from{' '}
+                {PATHS.toLocaleString()} Monte Carlo paths.
+            </Prose>
+
+            <div className="mt-7 grid grid-cols-1 sm:grid-cols-2 gap-x-16">
                 {propTable.map(({ line, prob_over }) => {
                     const pct = Math.round(prob_over * 100);
-                    const edge = pct >= 55 ? 'text-green-400' : pct <= 45 ? 'text-red-400' : 'text-muted-foreground';
+                    const l = lean(prob_over);
+                    const color = l >= strongest ? C.acid : l >= 7 ? C.ink2 : C.ink5;
                     const isAvg = Math.abs(line - seasonAvg) < 1.5;
                     return (
                         <div
                             key={line}
-                            className={`flex items-center justify-between px-4 py-2.5 rounded-xl border ${
-                                isAvg ? 'border-primary/40 bg-primary/5' : 'border-border bg-background'
-                            }`}
+                            className="grid grid-cols-[minmax(0,1fr)_72px_84px] gap-5 items-baseline py-4 border-b border-hair-row"
                         >
-                            <span className="text-sm font-medium text-foreground">
+                            <span className="text-base text-ink-3">
                                 {line} {STAT_UNITS[stat]}
-                                {isAvg && <span className="ml-1.5 text-xs text-primary">(avg)</span>}
+                                {isAvg && <span className="num text-xs text-ink-8 ml-2">avg</span>}
                             </span>
-                            <span className={`text-sm font-bold ${edge}`}>{pct}%</span>
+                            <span className="num text-[13px] text-ink-8 text-right">
+                                {pct >= 50 ? 'OVER' : 'UNDER'}
+                            </span>
+                            <span className="num text-lg font-medium text-right" style={{ color }}>
+                                {pct}%
+                            </span>
                         </div>
                     );
                 })}
             </div>
-        </div>
+        </Band>
     );
 }
 
-// ── Stat pills ────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub }) {
-    return (
-        <div className="bg-card border border-border rounded-2xl px-5 py-4">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
-            <p className="text-2xl font-bold text-foreground">{value}</p>
-            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-        </div>
-    );
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
-const Simulator = () => {
+export default function Simulator() {
     const [player, setPlayer] = useState(PLAYERS[0]);
-    const [stat, setStat]     = useState('pts');
+    const [stat, setStat] = useState('pts');
 
-    const [data, setData]       = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError]     = useState(null);
+    const { data, loading, error } = useFetch(
+        `${API_BASE}/api/simulator/?player_name=${encodeURIComponent(player)}&stat=${stat}`,
+    );
 
-    useEffect(() => {
-        setLoading(true);
-        setError(null);
-        setData(null);
-
-        const params = new URLSearchParams({ player_name: player, stat });
-        fetch(`${API_BASE}/api/simulator/?${params}`)
-            .then((res) => {
-                const ct = res.headers.get('content-type') || '';
-                if (!ct.includes('application/json'))
-                    throw new Error(`Server error (HTTP ${res.status})`);
-                return res.json().then((json) => ({ ok: res.ok, json }));
-            })
-            .then(({ ok, json }) => {
-                if (!ok) throw new Error(json.detail || 'Request failed');
-                setData(json);
-            })
-            .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
-    }, [player, stat]);
-
-    // ── Build unified chart data ───────────────────────────────────────────────
-    const chartData = React.useMemo(() => {
+    /*
+     * Actual games and projected quantiles share one series. The bands are
+     * genuine ranges — [p10, p90] and [p25, p75] — not areas dropped to the
+     * axis baseline, which would shade everything below p10 as if it were
+     * inside the interval.
+     */
+    const chartData = useMemo(() => {
         if (!data) return [];
-
-        const actualPoints = data.actual.map((g) => ({
-            gameNum:  g.game_num,
-            actual:   g.value,
+        const actual = data.actual.map((g) => ({
+            gameNum: g.game_num,
+            actual: g.value,
             opponent: g.opponent,
             isActual: true,
         }));
-
-        const futurePoints = data.projections.map((g) => ({
-            gameNum:  g.game_num,
-            p10:      g.p10,
-            p25:      g.p25,
-            p50:      g.p50,
-            p75:      g.p75,
-            p90:      g.p90,
-            // band helpers for Area components
-            band_10_25: [g.p10, g.p25],
+        const projected = data.projections.map((g) => ({
+            gameNum: g.game_num,
+            p10: g.p10, p25: g.p25, p50: g.p50, p75: g.p75, p90: g.p90,
+            band_10_90: [g.p10, g.p90],
             band_25_75: [g.p25, g.p75],
-            band_75_90: [g.p75, g.p90],
             isActual: false,
         }));
-
-        return [...actualPoints, ...futurePoints];
+        return [...actual, ...projected];
     }, [data]);
 
-    // Split tick labels: don't show every game
     const tickInterval = chartData.length > 40 ? 9 : chartData.length > 20 ? 4 : 2;
-
-    const splitX = data ? data.games_played + 0.5 : null;
+    const splitX = data ? Math.round(data.games_played + 0.5) : null;
+    const unit = STAT_UNITS[stat];
 
     return (
-        <div className="w-full max-w-5xl mx-auto text-left">
-
-            {/* ── Header ──────────────────────────────────────────────────── */}
-            <div className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
-                    Season Simulator
-                </h1>
-                <p className="text-muted-foreground mt-1 text-sm">
-                    AR(1) Monte Carlo — fan chart showing median projection ± uncertainty bands for the next 20 games.
-                </p>
-            </div>
-
-            {/* ── Controls ─────────────────────────────────────────────── */}
-            <div className="flex flex-wrap gap-4 mb-8 items-end">
-                {/* Player selector */}
-                <div className="space-y-1.5">
-                    <span className="text-xs uppercase tracking-wider font-semibold text-primary block">player</span>
-                    <Select value={player} onValueChange={setPlayer}>
-                        <SelectTrigger className="h-10 w-56 bg-input border-border rounded-xl">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-popover border-border rounded-xl">
-                            {PLAYERS.map((p) => (
-                                <SelectItem key={p} value={p} className="text-sm py-2.5">
-                                    {p}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                {/* Stat tabs */}
-                <div className="space-y-1.5">
-                    <span className="text-xs uppercase tracking-wider font-semibold text-primary block">stat</span>
-                    <div className="flex gap-1 bg-input rounded-xl p-1">
-                        {STATS.map(({ key, label }) => (
-                            <button
-                                key={key}
-                                type="button"
-                                onClick={() => setStat(key)}
-                                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                                    stat === key
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Loading ──────────────────────────────────────────────── */}
-            {loading && (
-                <div className="flex items-center justify-center py-32 text-muted-foreground text-sm">
-                    Running simulation...
-                </div>
-            )}
-
-            {/* ── Error ────────────────────────────────────────────────── */}
-            {!loading && error && (
-                <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-                    <span className="text-3xl">—</span>
-                    <p className="text-muted-foreground text-sm max-w-sm">{error}</p>
-                </div>
-            )}
-
-            {/* ── Results ──────────────────────────────────────────────── */}
-            {!loading && !error && data && (
-                <div className="space-y-6">
-
-                    {/* Stat cards */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <StatCard
-                            label="Season Avg"
-                            value={`${data.season_avg} ${STAT_UNITS[stat]}`}
-                            sub="2025-26 actual"
+        <>
+            <PageHead
+                eyebrow={
+                    data
+                        ? `AR(1) MONTE CARLO · ${PATHS.toLocaleString()} PATHS · NEXT 20 GAMES`
+                        : 'AR(1) MONTE CARLO'
+                }
+                title="Season simulator"
+                controls={
+                    <>
+                        <GhostSelect
+                            value={player}
+                            onChange={setPlayer}
+                            options={PLAYER_OPTIONS}
+                            label="Player"
                         />
-                        <StatCard
-                            label="Games Played"
-                            value={data.games_played}
-                            sub="in dataset"
-                        />
-                        <StatCard
-                            label="AR(1) φ"
-                            value={data.ar1_phi.toFixed(3)}
-                            sub={data.ar1_phi > 0.1 ? 'positive momentum' : data.ar1_phi < -0.1 ? 'mean-reverting' : 'near random walk'}
-                        />
-                        <StatCard
-                            label="AR(1) σ"
-                            value={data.ar1_sigma.toFixed(2)}
-                            sub="innovation std dev"
-                        />
-                    </div>
+                        <Tabs options={STAT_TABS} value={stat} onChange={setStat} ariaLabel="Stat" />
+                    </>
+                }
+            />
 
-                    {/* Fan chart */}
-                    <div className="bg-card border border-border rounded-2xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-base font-semibold text-foreground">
-                                Game-by-Game Trajectory + 20-Game Fan
-                            </h3>
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                <span className="flex items-center gap-1.5">
-                                    <span className="inline-block w-3 h-3 rounded-full bg-primary" />
+            <StateBlock
+                loading={loading}
+                error={error}
+                empty={!loading && !error && !data ? 'No simulation available for this player and stat.' : null}
+            >
+                {data && (
+                    <>
+                        <Band className="py-12">
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-4 lg:gap-x-12">
+                                {[
+                                    {
+                                        label: 'Season avg',
+                                        value: `${fmt(data.season_avg)}`,
+                                        sub: `${unit} · 2025–26 actual`,
+                                    },
+                                    {
+                                        label: 'Games played',
+                                        value: data.games_played,
+                                        sub: 'in the modelled set',
+                                    },
+                                    {
+                                        label: 'AR(1) φ',
+                                        symbol: true,
+                                        value: fmt(data.ar1_phi, 3),
+                                        sub: phiReading(data.ar1_phi),
+                                    },
+                                    {
+                                        label: 'AR(1) σ',
+                                        symbol: true,
+                                        value: fmt(data.ar1_sigma, 2),
+                                        sub: 'innovation std dev',
+                                    },
+                                ].map((k) => (
+                                    <div key={k.label} className="flex flex-col gap-2.5">
+                                        <Eyebrow wide preserveCase={k.symbol}>{k.label}</Eyebrow>
+                                        <span className="num text-[30px] sm:text-[38px] font-medium leading-none text-ink-0">
+                                            {k.value}
+                                        </span>
+                                        <span className="text-[13px] text-ink-7">{k.sub}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </Band>
+
+                        <Band className="py-12">
+                            <h2 className="text-[22px] sm:text-[24px] font-semibold tracking-[-0.02em] text-ink-1 leading-none">
+                                Trajectory and 20-game fan
+                            </h2>
+                            <Prose size="wide" className="mt-4 text-ink-6">
+                                Every game played this season, then the simulated range for the next
+                                twenty. The accent is what actually happened; the grey is what the
+                                model thinks could happen next.
+                            </Prose>
+
+                            <div className="mt-8 flex flex-wrap items-center gap-7 text-[13px] text-ink-7">
+                                <span className="flex items-center gap-2.5">
+                                    <span className="w-4 h-0.5 bg-acid" />
                                     Actual
                                 </span>
-                                <span className="flex items-center gap-1.5">
-                                    <span className="inline-block w-3 h-3 rounded-full bg-indigo-400/60" />
-                                    Projected (p10–p90)
+                                <span className="flex items-center gap-2.5">
+                                    <span className="w-4 h-0.5 bg-[var(--ink-3)]" />
+                                    Median projection
+                                </span>
+                                <span className="flex items-center gap-2.5">
+                                    <span className="w-4 h-2.5 bg-white/[0.14]" />
+                                    p25–p75
+                                </span>
+                                <span className="flex items-center gap-2.5">
+                                    <span className="w-4 h-2.5 bg-white/[0.09]" />
+                                    p10–p90
                                 </span>
                             </div>
-                        </div>
 
-                        <ResponsiveContainer width="100%" height={320}>
-                            <ComposedChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-                                <XAxis
-                                    dataKey="gameNum"
-                                    tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                                    interval={tickInterval}
-                                    label={{ value: 'Game #', position: 'insideBottomRight', offset: -4, fontSize: 11, fill: 'var(--muted-foreground)' }}
-                                />
-                                <YAxis
-                                    tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                                    width={32}
-                                    domain={['auto', 'auto']}
-                                />
-                                <Tooltip content={<FanTooltip stat={stat} />} />
+                            <div className="mt-7">
+                                <ResponsiveContainer width="100%" height={320}>
+                                    <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
+                                        <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                                        <XAxis
+                                            dataKey="gameNum"
+                                            tick={axis}
+                                            tickLine={false}
+                                            axisLine={{ stroke: 'var(--hair-rule)' }}
+                                            interval={tickInterval}
+                                        />
+                                        <YAxis
+                                            tick={axis}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            width={36}
+                                            domain={['auto', 'auto']}
+                                        />
+                                        <Tooltip content={<FanTooltip stat={stat} />} cursor={{ stroke: 'rgba(255,255,255,0.14)' }} />
 
-                                {/* Split line between actual and projected */}
-                                {splitX && (
-                                    <ReferenceLine
-                                        x={Math.round(splitX)}
-                                        stroke="#b0a89e"
-                                        strokeDasharray="4 4"
-                                        label={{ value: 'Projection →', position: 'insideTopRight', fontSize: 10, fill: '#b0a89e' }}
-                                    />
-                                )}
+                                        <ReferenceLine
+                                            y={data.season_avg}
+                                            stroke="rgba(255,255,255,0.13)"
+                                            strokeDasharray="4 6"
+                                        />
+                                        {splitX && (
+                                            <ReferenceLine
+                                                x={splitX}
+                                                stroke="rgba(255,255,255,0.22)"
+                                                strokeDasharray="4 4"
+                                                label={{
+                                                    value: 'PROJECTION',
+                                                    position: 'insideTopRight',
+                                                    fontSize: 10,
+                                                    fontFamily: 'IBM Plex Mono',
+                                                    fill: 'var(--ink-8)',
+                                                }}
+                                            />
+                                        )}
 
-                                {/* Season avg line */}
-                                <ReferenceLine
-                                    y={data.season_avg}
-                                    stroke="rgba(99,102,241,0.4)"
-                                    strokeDasharray="6 3"
-                                    label={{ value: `avg ${data.season_avg}`, position: 'insideTopLeft', fontSize: 10, fill: 'rgba(99,102,241,0.7)' }}
-                                />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="band_10_90"
+                                            stroke="none"
+                                            fill="rgba(255,255,255,0.09)"
+                                            activeDot={false}
+                                            isAnimationActive={false}
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="band_25_75"
+                                            stroke="none"
+                                            fill="rgba(255,255,255,0.14)"
+                                            activeDot={false}
+                                            isAnimationActive={false}
+                                        />
 
-                                {/* Projected fan: p10-p90 outer band */}
-                                <Area
-                                    type="monotone"
-                                    dataKey="p90"
-                                    stroke="none"
-                                    fill="rgba(99,102,241,0.08)"
-                                    activeDot={false}
-                                    legendType="none"
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="p10"
-                                    stroke="none"
-                                    fill="rgba(99,102,241,0.08)"
-                                    activeDot={false}
-                                    legendType="none"
-                                    isAnimationActive={false}
-                                    fillOpacity={0}
-                                />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="p50"
+                                            stroke="var(--ink-3)"
+                                            strokeWidth={2}
+                                            dot={false}
+                                            activeDot={{ r: 3.5 }}
+                                            isAnimationActive={false}
+                                        />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="actual"
+                                            stroke={C.acid}
+                                            strokeWidth={1.5}
+                                            dot={{ r: 2, fill: C.acid, strokeWidth: 0 }}
+                                            activeDot={{ r: 4 }}
+                                            isAnimationActive={false}
+                                            connectNulls={false}
+                                        />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            </div>
 
-                                {/* Projected fan: p25-p75 inner band */}
-                                <Area
-                                    type="monotone"
-                                    dataKey="p75"
-                                    stroke="none"
-                                    fill="rgba(99,102,241,0.18)"
-                                    activeDot={false}
-                                    legendType="none"
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="p25"
-                                    stroke="none"
-                                    fill="rgba(99,102,241,0.18)"
-                                    activeDot={false}
-                                    legendType="none"
-                                    isAnimationActive={false}
-                                    fillOpacity={0}
-                                />
+                            <Prose size="narrow" className="mt-6 text-ink-7">
+                                φ = {fmt(data.ar1_phi, 3)} — {phiReading(data.ar1_phi)}.
+                            </Prose>
+                        </Band>
 
-                                {/* Median line */}
-                                <Line
-                                    type="monotone"
-                                    dataKey="p50"
-                                    stroke="rgba(99,102,241,0.85)"
-                                    strokeWidth={2}
-                                    dot={false}
-                                    activeDot={{ r: 4 }}
-                                    legendType="none"
-                                    isAnimationActive={false}
-                                />
+                        <PropTable
+                            propTable={data.prop_table}
+                            seasonAvg={data.season_avg}
+                            stat={stat}
+                        />
 
-                                {/* Actual game dots */}
-                                <Line
-                                    type="monotone"
-                                    dataKey="actual"
-                                    stroke="var(--primary)"
-                                    strokeWidth={1.5}
-                                    dot={{ r: 2.5, fill: 'var(--primary)', strokeWidth: 0 }}
-                                    activeDot={{ r: 5 }}
-                                    legendType="none"
-                                    isAnimationActive={false}
-                                    connectNulls={false}
-                                />
-                            </ComposedChart>
-                        </ResponsiveContainer>
-
-                        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                            <span>Shaded bands show p10–p90 (outer) and p25–p75 (inner) from {1000} Monte Carlo paths.</span>
-                            <span>φ = {data.ar1_phi.toFixed(3)} — {data.ar1_phi > 0.15 ? 'hot/cold streaks persist' : data.ar1_phi < -0.1 ? 'strong mean reversion' : 'near-random game-to-game variation'}</span>
-                        </div>
-                    </div>
-
-                    {/* Prop probability table */}
-                    <PropTable
-                        propTable={data.prop_table}
-                        seasonAvg={data.season_avg}
-                        stat={stat}
-                    />
-                </div>
-            )}
-        </div>
+                        <FootNotes
+                            items={[
+                                `Bands are the p10–p90 and p25–p75 intervals across ${PATHS.toLocaleString()} simulated paths`,
+                                'AR(1) fits one autoregressive term to this season only — it carries no opponent, rest or injury context',
+                                'A simulated probability is not a price. It does not account for the vig.',
+                            ]}
+                        />
+                    </>
+                )}
+            </StateBlock>
+        </>
     );
-};
-
-export default Simulator;
+}

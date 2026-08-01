@@ -1,10 +1,9 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
-import Home from './components/Home';
+import Board from './components/Board';
 import Overview from './components/Overview';
 import AboutUs from './components/AboutUs';
-import DailyPicks from './components/DailyPicks';
 import Backtest from './components/Backtest';
 import SeasonReport from './components/SeasonReport';
 import Leaderboard from './components/Leaderboard';
@@ -17,10 +16,11 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
+          <Route index element={<Board />} />
           <Route path="overview" element={<Overview />} />
           <Route path="about" element={<AboutUs />} />
-          <Route path="picks" element={<DailyPicks />} />
+          {/* The board is the home page now — keep the old picks URL working. */}
+          <Route path="picks" element={<Navigate to="/" replace />} />
           <Route path="backtest" element={<Backtest />} />
           <Route path="season-report" element={<SeasonReport />} />
           <Route path="leaderboard" element={<Leaderboard />} />
