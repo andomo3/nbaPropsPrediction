@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ..constants import season_context
 from ..models import DailyPick
 from ..utils.dates import et_today
 
@@ -82,4 +83,7 @@ class LitePicksView(APIView):
             "picks": picks,
             "count": len(picks),
             "generated_at": generated_at,
+            # Lets the board explain an empty slate: no games tonight is a
+            # different state from the season being over.
+            "season": season_context(pick_date),
         })
