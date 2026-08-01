@@ -13,7 +13,7 @@ from ..constants import (
 )
 from ..models import BacktestRun
 from ..services.backtest import run_backtest
-from ..utils.stats import pred_score_tier
+from ..utils.stats import pred_components, pred_score_tier
 
 
 class BacktestView(APIView):
@@ -407,7 +407,12 @@ class LeaderboardView(APIView):
                     "bias":    -0.14,
                     "hit_rate": 0.601,
                     "total_pnl": 4.20,
-                    "roi":      5.1
+                    "roi":      5.1,
+                    "predictability_score": 71.4,
+                    "predictability_tier":  "High",
+                    "r2":         0.42,   // score components
+                    "cv":         0.34,
+                    "hit_excess": 7.7     // hit rate minus break-even, in points
                 },
                 ...
             ]
@@ -472,7 +477,7 @@ class LeaderboardView(APIView):
             # ── Predictability score ──────────────────────────────────────────
             actuals    = [r.actual for r in results]
             errors     = [r.error  for r in results]
-            pred_score, pred_tier = pred_score_tier(actuals, errors, run.accuracy)
+            pred       = pred_components(actuals, errors, run.accuracy)
 
             rankings.append({
                 "player_name":        player_name,
@@ -482,8 +487,12 @@ class LeaderboardView(APIView):
                 "hit_rate":           round(run.accuracy, 4),
                 "total_pnl":          round(run.total_pnl, 2),
                 "roi":                round(run.roi, 2),
-                "predictability_score": pred_score,
-                "predictability_tier":  pred_tier,
+                "predictability_score": pred["score"],
+                "predictability_tier":  pred["tier"],
+                # Score components, so the leaderboard can show its working
+                "r2":                 pred["r2"],
+                "cv":                 pred["cv"],
+                "hit_excess":         pred["hit_excess"],
             })
 
         # Sort by MAE ascending — lowest error = most predictable = rank 1
