@@ -66,15 +66,24 @@ npm run build   # production build
 Key locations:
 - Page components → `frontend/src/components/`
 - Intelligence section components → `frontend/src/components/intelligence/`
-- Reusable primitives → `frontend/src/components/ui/`
+- Terminal design-system primitives → `frontend/src/components/terminal/`
+- Form controls (shadcn-derived) → `frontend/src/components/ui/`
+- Design tokens → `frontend/src/index.css` and `frontend/tailwind.config.js`
 - Shared formatters → `frontend/src/utils/format.js`
 - Constants (players, stats, API base) → `frontend/src/utils/constants.js`
 
+The UI follows the Terminal system: structure comes from hairline dividers
+rather than cards or shadows, the acid-lime accent marks the single best value
+in a group, amber means caution, red is reserved for genuinely negative values,
+and every figure is set in IBM Plex Mono via the `.num` class.
+
 When adding a new intelligence section component:
 1. Create it in `frontend/src/components/intelligence/`
-2. Accept `{ data, loading, error }` props
-3. Use `SectionCard`, `Skeleton`, `InsightText` from `../ui/`
-4. Import colors and formatters from `../../utils/format`
+2. Accept `{ id, data, loading, error }` props
+3. Wrap the body in `DetailBand` from `../terminal/DetailBand`, and use
+   `Eyebrow` and `Insight` from `../terminal/ui`
+4. Import colors and formatters from `../../utils/format` — prefer
+   `groupHitColor` over `hitColor` inside a group of comparable rows
 5. Import it in `PlayerIntelligence.jsx` and add the corresponding `useFetch` call
 
 ## Pull request process
