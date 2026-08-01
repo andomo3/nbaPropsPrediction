@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
-import CardNav from './CardNav';
+import { Link, Outlet, useLocation } from 'react-router-dom';
+import Nav, { SECONDARY_LINKS } from './terminal/Nav';
+import { GUTTER } from './terminal/ui';
 
 const ROUTE_TITLES = {
-    '/': 'Perchance — NBA Player Prop Intelligence',
+    '/': "Tonight's Board — Perchance",
     '/overview': 'How It Works — Perchance',
     '/about': 'About Us — Perchance',
-    '/picks': "Today's Picks — Perchance",
     '/backtest': 'Backtesting — Perchance',
     '/season-report': 'Season Report Card — Perchance',
     '/leaderboard': 'Predictability Leaderboard — Perchance',
@@ -14,6 +14,27 @@ const ROUTE_TITLES = {
     '/simulator': 'Season Simulator — Perchance',
     '/intelligence': 'Player Intelligence — Perchance',
 };
+
+function Footer() {
+    return (
+        <footer className={`${GUTTER} pt-14 pb-16 border-t border-hair flex flex-col gap-3.5`}>
+            <div className="flex flex-wrap gap-x-8 gap-y-2">
+                {SECONDARY_LINKS.map(({ label, to }) => (
+                    <Link
+                        key={to}
+                        to={to}
+                        className="text-[15px] text-ink-6 hover:text-[#D9D9D6] transition-colors duration-[130ms]"
+                    >
+                        {label}
+                    </Link>
+                ))}
+            </div>
+            <p className="text-sm text-ink-9">
+                Modelled output for research. Not betting advice.
+            </p>
+        </footer>
+    );
+}
 
 const Layout = () => {
     const { pathname } = useLocation();
@@ -23,11 +44,12 @@ const Layout = () => {
     }, [pathname]);
 
     return (
-        <div className="min-h-screen bg-background">
-            <CardNav logoText="Perchance" />
-            <main className="container mx-auto px-4 pt-20 pb-16">
+        <div className="min-h-screen bg-background flex flex-col">
+            <Nav />
+            <main className="flex-1">
                 <Outlet />
             </main>
+            <Footer />
         </div>
     );
 };
