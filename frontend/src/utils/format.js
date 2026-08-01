@@ -11,6 +11,7 @@ export const C = {
     caution: '#E8A33D',
     cautionText: '#F4C87A',
     alert:   '#E8776B',
+    ink0:    '#F7F7F5',
     ink2:    '#EDEDEA',
     ink3:    '#C7C7CC',
     ink4:    '#9A9AA2',
