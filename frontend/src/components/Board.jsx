@@ -4,6 +4,7 @@ import {
     Eyebrow, FootNotes, GhostSelect, GUTTER, HeadRow, Meter,
     NameCell, Num, PageHead, Row, StateBlock, Tabs, VRule,
 } from './terminal/ui';
+import BoardEmpty from './BoardEmpty';
 import { API_BASE, STATS } from '../utils/constants';
 import { C, fmt, signed } from '../utils/format';
 
@@ -252,6 +253,7 @@ export default function Board() {
     );
 
     const statLabel = STATS.find((s) => s.key === stat)?.label ?? stat;
+    const season = data?.season ?? null;
     const matchups = new Set(picks.map((p) => [p.team, p.opponent].sort().join('-'))).size;
     const boardDate = data?.date
         ? new Date(`${data.date}T12:00:00`).toLocaleDateString('en-US', {
@@ -259,14 +261,34 @@ export default function Board() {
           }).toUpperCase()
         : '—';
 
+    // An empty slate is a screen of its own, not a one-line message: the stat
+    // tabs and edge filter have nothing to act on, so they come off too.
+    const slateEmpty = !loading && !error && picks.length === 0;
+
+    let headEyebrow;
+    if (picks.length > 0) {
+        headEyebrow = `${boardDate} · ${picks.length} PROPS MODELLED · ${matchups} MATCHUPS`;
+    } else if (slateEmpty) {
+        headEyebrow = season?.status === 'in_season' || !season
+            ? `${boardDate} · NO SLATE`
+            : `${boardDate} · OFF-SEASON`;
+    } else {
+        headEyebrow = `${boardDate} · TODAY'S SLATE`;
+    }
+
+    if (slateEmpty) {
+        return (
+            <>
+                <PageHead eyebrow={headEyebrow} title="Tonight's board" />
+                <BoardEmpty season={season} statLabel={statLabel} />
+            </>
+        );
+    }
+
     return (
         <>
             <PageHead
-                eyebrow={
-                    picks.length > 0
-                        ? `${boardDate} · ${picks.length} PROPS MODELLED · ${matchups} MATCHUPS`
-                        : `${boardDate} · TODAY'S SLATE`
-                }
+                eyebrow={headEyebrow}
                 title="Tonight's board"
                 controls={
                     <>
@@ -282,16 +304,7 @@ export default function Board() {
                 }
             />
 
-            <StateBlock
-                loading={loading}
-                error={error}
-                empty={
-                    picks.length === 0
-                        ? `No ${statLabel.toLowerCase()} props have been generated for this slate yet.`
-                        : null
-                }
-                emptyHint="python manage.py generate_daily_picks"
-            >
+            <StateBlock loading={loading} error={error}>
                 <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_1px_360px]">
                     <div className="flex flex-col min-w-0 border-b border-hair xl:border-b-0">
                         <div className="lg:hidden">
