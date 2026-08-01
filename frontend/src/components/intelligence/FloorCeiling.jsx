@@ -3,132 +3,193 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
     Tooltip, ReferenceLine, ResponsiveContainer, Cell,
 } from 'recharts';
-import SectionCard from '../ui/SectionCard';
-import Skeleton from '../ui/Skeleton';
-import InsightText from '../ui/InsightText';
+import DetailBand from '../terminal/DetailBand';
+import { Eyebrow, Insight } from '../terminal/ui';
 import { C, pct, fmt } from '../../utils/format';
 
 const ARCHETYPE_COLOR = {
-    'Consistent Workhorse': C.green,
-    'Reliable Contributor': C.green,
-    'Steady Performer':     C.amber,
-    'Volatile Scorer':      C.amber,
-    'Boom/Bust Gamble':     C.red,
+    'Consistent Workhorse': C.acid,
+    'Reliable Contributor': C.acid,
+    'Steady Performer':     C.cautionText,
+    'Volatile Scorer':      C.cautionText,
+    'Boom/Bust Gamble':     C.alert,
 };
 
-export default function FloorCeiling({ data, loading, error, collapsible = false, defaultOpen = true }) {
-    const cardProps = { title: 'Floor / Ceiling Profile', collapsible, defaultOpen };
-    if (loading) return <SectionCard {...cardProps}><Skeleton /></SectionCard>;
-    if (error)   return <SectionCard {...cardProps}><p className="text-sm text-red-400">{error}</p></SectionCard>;
-    if (!data)   return null;
+const axis = { fontSize: 11, fill: 'var(--ink-8)', fontFamily: 'IBM Plex Mono' };
 
-    const {
-        percentiles = {},
-        boom_bust, archetype,
-        histogram = [],
-        condition_splits = [],
-        roster_comparison = [],
-        insight,
-    } = data;
+function ChartTip({ active, payload, label, unit }) {
+    if (!active || !payload?.length) return null;
+    return (
+        <div className="bg-popover border border-hair-control rounded-lg px-3 py-2">
+            <p className="num text-[11px] tracking-eyebrow uppercase text-ink-8 mb-1">{label}</p>
+            <p className="num text-sm text-ink-1">
+                {payload[0].value} {unit}
+            </p>
+        </div>
+    );
+}
 
+export default function FloorCeiling({ id, data, loading, error }) {
+    const archetype = data?.archetype;
+    const archetypeColor = ARCHETYPE_COLOR[archetype] ?? C.ink3;
+
+    const percentiles = data?.percentiles ?? {};
     const { p25, p75 } = percentiles;
-    const archetypeColor = ARCHETYPE_COLOR[archetype] ?? C.slate;
+    const histogram = data?.histogram ?? [];
+    const conditionSplits = data?.condition_splits ?? [];
+    const rosterComparison = data?.roster_comparison ?? [];
 
-    const histData = histogram.map(b => {
-        const mid = ((b.bin_lo + b.bin_hi) / 2).toFixed(1);
-        const fill = b.bin_hi <= p25 ? C.red : b.bin_lo >= p75 ? C.green : C.amber;
-        return { ...b, mid, fill };
-    });
+    const histData = histogram.map((b) => ({
+        ...b,
+        mid: ((b.bin_lo + b.bin_hi) / 2).toFixed(1),
+        fill: b.bin_hi <= p25 ? 'rgba(232,119,107,0.55)'
+            : b.bin_lo >= p75 ? C.acid
+            : 'rgba(255,255,255,0.14)',
+    }));
 
     return (
-        <SectionCard
-            title="Floor / Ceiling Profile"
+        <DetailBand
+            id={id}
+            label="Floor / ceiling profile"
             subtitle="Realistic output range and boom/bust classification"
-            collapsible={collapsible}
-            defaultOpen={defaultOpen}
+            loading={loading}
+            error={error}
         >
-            <div className="flex items-center gap-6 mb-6 flex-wrap">
-                {[['Floor (p10)', percentiles.p10], ['Median (p50)', percentiles.p50], ['Ceiling (p90)', percentiles.p90], ['Boom/Bust', boom_bust]].map(([label, val]) => (
-                    <div key={label} className="text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</p>
-                        <p className="text-2xl font-bold text-foreground">{fmt(val, label === 'Boom/Bust' ? 2 : 1)}</p>
+            {!data ? null : (
+                <div className="flex flex-col gap-8">
+                    <div className="flex flex-wrap items-end gap-x-10 gap-y-5">
+                        {[
+                            ['Floor (p10)', percentiles.p10, 1],
+                            ['Median (p50)', percentiles.p50, 1],
+                            ['Ceiling (p90)', percentiles.p90, 1],
+                            ['Boom / bust', data.boom_bust, 2],
+                        ].map(([label, val, dp]) => (
+                            <div key={label} className="flex flex-col gap-1.5">
+                                <Eyebrow>{label}</Eyebrow>
+                                <span className="num text-[26px] font-medium text-ink-0 leading-none">
+                                    {fmt(val, dp)}
+                                </span>
+                            </div>
+                        ))}
+                        {archetype && (
+                            <div className="flex flex-col gap-1.5">
+                                <Eyebrow>Archetype</Eyebrow>
+                                <span
+                                    className="text-[20px] font-semibold leading-none"
+                                    style={{ color: archetypeColor }}
+                                >
+                                    {archetype}
+                                </span>
+                            </div>
+                        )}
                     </div>
-                ))}
-                {archetype && (
-                    <span className="px-3 py-1 rounded-full text-xs font-semibold"
-                        style={{ background: `${archetypeColor}22`, color: archetypeColor }}>
-                        {archetype}
-                    </span>
-                )}
-            </div>
 
-            {histData.length > 0 && (
-                <div className="mb-6">
-                    <p className="text-xs text-muted-foreground mb-2">Output distribution</p>
-                    <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={histData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-                            <XAxis dataKey="mid" tick={{ fontSize: 10, fill: C.slate }} />
-                            <YAxis tick={{ fontSize: 11, fill: C.slate }} />
-                            <Tooltip formatter={v => [v, 'Games']} />
-                            {p25 != null && <ReferenceLine x={p25?.toFixed(1)} stroke={C.red} strokeDasharray="4 2" label={{ value: 'p25', fill: C.red, fontSize: 10 }} />}
-                            {p75 != null && <ReferenceLine x={p75?.toFixed(1)} stroke={C.green} strokeDasharray="4 2" label={{ value: 'p75', fill: C.green, fontSize: 10 }} />}
-                            <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                                {histData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
+                    {histData.length > 0 && (
+                        <div className="flex flex-col gap-3">
+                            <Eyebrow wide>Output distribution</Eyebrow>
+                            <ResponsiveContainer width="100%" height={200}>
+                                <BarChart data={histData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                                    <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                                    <XAxis dataKey="mid" tick={axis} tickLine={false} axisLine={{ stroke: 'var(--hair-rule)' }} />
+                                    <YAxis tick={axis} tickLine={false} axisLine={false} width={28} />
+                                    <Tooltip content={<ChartTip unit="games" />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                                    {p25 != null && (
+                                        <ReferenceLine x={p25.toFixed(1)} stroke={C.alert} strokeDasharray="4 4" />
+                                    )}
+                                    {p75 != null && (
+                                        <ReferenceLine x={p75.toFixed(1)} stroke={C.acid} strokeDasharray="4 4" />
+                                    )}
+                                    <Bar dataKey="count" radius={[2, 2, 0, 0]}>
+                                        {histData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                            <p className="text-xs text-ink-8">
+                                Dashed markers are the p25 and p75 boundaries.
+                            </p>
+                        </div>
+                    )}
+
+                    {conditionSplits.length > 0 && (
+                        <div className="flex flex-col gap-3">
+                            <Eyebrow wide>Condition splits</Eyebrow>
+                            <div className="table-scroll">
+                                <div className="min-w-[620px]">
+                                    <div className="grid grid-cols-[1.4fr_repeat(6,minmax(0,1fr))] gap-3 py-2 border-b border-hair num text-[11px] font-medium tracking-eyebrow uppercase text-ink-8">
+                                        <span>Condition</span>
+                                        <span className="text-right">N</span>
+                                        <span className="text-right">Floor</span>
+                                        <span className="text-right">Median</span>
+                                        <span className="text-right">Ceiling</span>
+                                        <span className="text-right">Floor %</span>
+                                        <span className="text-right">Ceiling %</span>
+                                    </div>
+                                    {conditionSplits.map((r) => (
+                                        <div
+                                            key={r.label}
+                                            className="grid grid-cols-[1.4fr_repeat(6,minmax(0,1fr))] gap-3 py-2.5 border-b border-hair-soft items-baseline"
+                                        >
+                                            <span className="text-sm text-ink-3 truncate">{r.label}</span>
+                                            <span className="num text-[13px] text-ink-8 text-right">{r.n}</span>
+                                            <span className="num text-[13px] text-ink-2 text-right">{fmt(r.floor)}</span>
+                                            <span className="num text-[13px] text-ink-2 text-right">{fmt(r.median)}</span>
+                                            <span className="num text-[13px] text-ink-2 text-right">{fmt(r.ceiling)}</span>
+                                            <span
+                                                className="num text-[13px] text-right"
+                                                style={{ color: r.floor_rate > 0.3 ? C.alert : C.ink5 }}
+                                            >
+                                                {pct(r.floor_rate)}
+                                            </span>
+                                            <span
+                                                className="num text-[13px] text-right"
+                                                style={{ color: r.ceiling_rate > 0.3 ? C.acid : C.ink5 }}
+                                            >
+                                                {pct(r.ceiling_rate)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {rosterComparison.length > 0 && (
+                        <div className="flex flex-col gap-3">
+                            <Eyebrow wide>Roster boom/bust comparison</Eyebrow>
+                            <ResponsiveContainer width="100%" height={200}>
+                                <BarChart data={rosterComparison} margin={{ top: 8, right: 8, left: 0, bottom: 46 }}>
+                                    <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                                    <XAxis
+                                        dataKey="player_name"
+                                        tick={{ ...axis, fontSize: 10 }}
+                                        tickLine={false}
+                                        axisLine={{ stroke: 'var(--hair-rule)' }}
+                                        angle={-32}
+                                        textAnchor="end"
+                                        interval={0}
+                                    />
+                                    <YAxis tick={axis} tickLine={false} axisLine={false} width={32} />
+                                    <Tooltip content={<ChartTip unit="boom/bust" />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                                    <Bar dataKey="boom_bust" radius={[2, 2, 0, 0]}>
+                                        {rosterComparison.map((entry, i) => (
+                                            <Cell
+                                                key={i}
+                                                fill={
+                                                    entry.player_name === data.player_name
+                                                        ? C.acid
+                                                        : ARCHETYPE_COLOR[entry.archetype] ?? 'rgba(255,255,255,0.14)'
+                                                }
+                                            />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    )}
+
+                    <Insight text={data.insight} />
                 </div>
             )}
-
-            {condition_splits.length > 0 && (
-                <div className="mb-6 overflow-x-auto">
-                    <p className="text-xs font-semibold text-muted-foreground mb-2">Condition splits</p>
-                    <table className="w-full text-xs">
-                        <thead>
-                            <tr className="text-muted-foreground border-b border-border">
-                                {['Condition', 'N', 'Floor', 'Median', 'Ceiling', 'Floor%', 'Ceiling%'].map(h => (
-                                    <th key={h} className={`py-1.5 ${h === 'Condition' ? 'text-left pr-3' : 'text-right px-2'}`}>{h}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {condition_splits.map((r, i) => (
-                                <tr key={i} className="border-b border-border/40">
-                                    <td className="py-1.5 pr-3 text-foreground">{r.label}</td>
-                                    <td className="text-right px-2 text-muted-foreground">{r.n}</td>
-                                    <td className="text-right px-2 text-foreground">{fmt(r.floor)}</td>
-                                    <td className="text-right px-2 text-foreground">{fmt(r.median)}</td>
-                                    <td className="text-right px-2 text-foreground">{fmt(r.ceiling)}</td>
-                                    <td className="text-right px-2" style={{ color: r.floor_rate > 0.3 ? C.red : C.slate }}>{pct(r.floor_rate)}</td>
-                                    <td className="text-right pl-2" style={{ color: r.ceiling_rate > 0.3 ? C.green : C.slate }}>{pct(r.ceiling_rate)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            {roster_comparison.length > 0 && (
-                <div className="mb-4">
-                    <p className="text-xs font-semibold text-muted-foreground mb-2">Roster boom/bust comparison</p>
-                    <ResponsiveContainer width="100%" height={180}>
-                        <BarChart data={roster_comparison} margin={{ top: 8, right: 16, left: 0, bottom: 40 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-                            <XAxis dataKey="player_name" tick={{ fontSize: 9, fill: C.slate }} angle={-30} textAnchor="end" interval={0} />
-                            <YAxis tick={{ fontSize: 11, fill: C.slate }} />
-                            <Tooltip formatter={v => [Number(v).toFixed(2), 'Boom/Bust']} />
-                            <Bar dataKey="boom_bust" radius={[3, 3, 0, 0]}>
-                                {roster_comparison.map((entry, i) => (
-                                    <Cell key={i} fill={ARCHETYPE_COLOR[entry.archetype] ?? C.slate} />
-                                ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-            )}
-
-            <InsightText text={insight} />
-        </SectionCard>
+        </DetailBand>
     );
 }
