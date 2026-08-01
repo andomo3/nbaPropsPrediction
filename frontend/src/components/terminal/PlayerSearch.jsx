@@ -73,7 +73,9 @@ export default function PlayerSearch({ open, onClose }) {
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={onKeyDown}
                         placeholder="Search players"
-                        className="flex-1 bg-transparent text-[15px] text-ink-1 placeholder:text-ink-8 outline-none"
+                        /* The dialog only opens focused on this field, so the
+                           global focus ring would be permanent noise here. */
+                        className="flex-1 bg-transparent text-[15px] text-ink-1 placeholder:text-ink-8 outline-none focus-visible:outline-none"
                     />
                     <kbd className="num text-[11px] font-medium text-ink-9 border border-hair-control rounded px-1.5 py-0.5">
                         ESC

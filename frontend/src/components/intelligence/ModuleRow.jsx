@@ -9,10 +9,10 @@ function Module({ title, value, valueColor, blurb, viz, href, last = false }) {
                 last ? '' : 'xl:border-r'
             } border-hair group hover:bg-white/[0.02] transition-colors`}
         >
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <span className="text-[15px] font-semibold text-ink-1">{title}</span>
                 <span
-                    className="num text-[13px] font-medium shrink-0"
+                    className="num text-[13px] font-medium"
                     style={{ color: valueColor || C.ink2 }}
                 >
                     {value}

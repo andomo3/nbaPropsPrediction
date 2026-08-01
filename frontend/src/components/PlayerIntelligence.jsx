@@ -164,7 +164,7 @@ export default function PlayerIntelligence() {
                         <Figure
                             label="MAE"
                             value={summary ? fmt(summary.mae, 2) : '—'}
-                            sub={rank ? `${rank.rank} of ${rank.total} players` : undefined}
+                            sub={rank ? `Rank ${rank.rank} of ${rank.total} players` : undefined}
                         />
                         <Figure
                             label="Bias"

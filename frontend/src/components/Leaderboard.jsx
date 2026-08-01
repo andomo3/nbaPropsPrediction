@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
     Band, Eyebrow, FootNotes, GhostSelect, GUTTER, NameCell,
-    PageHead, Sparkline, StateBlock, Tabs, VRule,
+    PageHead, StateBlock, Tabs, VRule,
 } from './terminal/ui';
 import useFetch from './terminal/useFetch';
 import { API_BASE, STATS } from '../utils/constants';
@@ -21,8 +21,32 @@ const MODELS = [
 
 const STAT_TABS = STATS.map((s) => ({ value: s.key, label: s.label }));
 
-const COLS = '44px minmax(160px,220px) 72px 78px 70px 70px 84px minmax(110px,1fr) 76px';
-const TABLE_MIN = 'min-w-[940px]';
+const COLS = '44px minmax(160px,1fr) 72px 78px 70px 70px 84px 132px 76px';
+const TABLE_MIN = 'min-w-[960px]';
+
+/** Change in composite score against the prior season, as a diverging bar. */
+const DELTA_CAP = 15;
+
+function DeltaBar({ delta }) {
+    if (delta == null) {
+        return <div className="h-1 bg-track" aria-hidden="true" />;
+    }
+    const width = Math.min(Math.abs(delta), DELTA_CAP) / DELTA_CAP * 50;
+    const up = delta >= 0;
+    return (
+        <div className="relative h-1 bg-track" aria-hidden="true">
+            <div
+                className="absolute inset-y-0"
+                style={{
+                    left: up ? '50%' : `${50 - width}%`,
+                    width: `${width}%`,
+                    background: up ? C.acid : C.alert,
+                }}
+            />
+            <div className="absolute inset-y-0 left-1/2 w-px bg-white/25" />
+        </div>
+    );
+}
 
 const TIER_COLOR = {
     High:     C.acid,
@@ -124,6 +148,10 @@ export default function Leaderboard() {
         return counts;
     }, [rankings]);
 
+    const bestExcess = rankings.length
+        ? Math.max(...rankings.map((r) => r.hit_excess ?? -Infinity))
+        : null;
+
     const statLabel = STATS.find((s) => s.key === stat)?.label ?? stat;
 
     return (
@@ -152,7 +180,7 @@ export default function Leaderboard() {
                         value={top?.player_name ?? '—'}
                         sub={
                             top
-                                ? `Score ${fmt(top.predictability_score, 1)} · ${top.predictability_tier} · MAE ${fmt(top.mae, 2)}`
+                                ? `Score ${fmt(top.predictability_score, 0)} · ${top.predictability_tier} · MAE ${fmt(top.mae, 2)}`
                                 : '—'
                         }
                     />
@@ -183,7 +211,70 @@ export default function Leaderboard() {
                     />
                 </Band>
 
-                <div className="table-scroll border-b border-hair">
+                {/* Narrow viewports get a stacked row — the nine-column table
+                    only makes sense once there is width to hold it. */}
+                <div className="lg:hidden border-b border-hair">
+                    {rows.map((r) => {
+                        const tierColor = TIER_COLOR[r.predictability_tier] ?? C.ink8;
+                        const was = prior[r.player_name];
+                        const delta = was != null && r.predictability_score != null
+                            ? r.predictability_score - was
+                            : null;
+                        return (
+                            <Link
+                                key={r.player_name}
+                                to={`/intelligence?player_name=${encodeURIComponent(r.player_name)}&stat=${stat}`}
+                                className={`${GUTTER} py-3.5 flex flex-col gap-2.5 border-b border-hair-soft`}
+                            >
+                                <div className="flex items-baseline gap-3">
+                                    <span
+                                        className="num text-sm font-medium shrink-0"
+                                        style={{ color: r.rank === 1 ? C.acid : C.ink8 }}
+                                    >
+                                        {String(r.rank).padStart(2, '0')}
+                                    </span>
+                                    <span className="text-[15px] font-medium text-ink-1 flex-1 min-w-0 truncate">
+                                        {r.player_name}
+                                    </span>
+                                    <span
+                                        className="num text-base font-semibold shrink-0"
+                                        style={{ color: tierColor }}
+                                    >
+                                        {fmt(r.predictability_score, 0)}
+                                    </span>
+                                    <span
+                                        className="num text-xs font-semibold shrink-0 w-[62px] text-right"
+                                        style={{ color: tierColor }}
+                                    >
+                                        {r.predictability_tier ?? '—'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-4 gap-3">
+                                    {[
+                                        ['MAE', fmt(r.mae, 2), C.ink3],
+                                        ['R²', fmt(r.r2, 2), C.ink3],
+                                        ['Hit exc.', signed(r.hit_excess, 1),
+                                            r.hit_excess >= bestExcess ? C.acid
+                                                : r.hit_excess > 0 ? C.ink2
+                                                : r.hit_excess > -2 ? C.ink5
+                                                : C.alert],
+                                        [`vs ${PRIOR_SEASON_LABEL}`, delta == null ? '—' : signed(delta, 1),
+                                            delta == null ? C.ink8 : delta > 1 ? C.acid : delta < -1 ? C.alert : C.ink3],
+                                    ].map(([label, value, color]) => (
+                                        <div key={label} className="flex flex-col gap-0.5 min-w-0">
+                                            <span className="num text-[10px] tracking-eyebrow uppercase text-ink-8 truncate">
+                                                {label}
+                                            </span>
+                                            <span className="num text-sm" style={{ color }}>{value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </Link>
+                        );
+                    })}
+                </div>
+
+                <div className="hidden lg:block table-scroll border-b border-hair">
                     <div className={TABLE_MIN}>
                         <div
                             style={{ gridTemplateColumns: COLS }}
@@ -242,15 +333,20 @@ export default function Leaderboard() {
                                     <span className="num text-[15px] text-ink-3 text-right">{fmt(r.cv, 2)}</span>
                                     <span
                                         className="num text-[15px] text-right"
-                                        style={{ color: r.hit_excess > 0 ? C.acid : C.ink5 }}
+                                        style={{
+                                            color: r.hit_excess == null ? C.ink8
+                                                : r.hit_excess >= bestExcess ? C.acid
+                                                : r.hit_excess > 0 ? C.ink2
+                                                : r.hit_excess > -2 ? C.ink5
+                                                : C.alert,
+                                        }}
                                     >
                                         {signed(r.hit_excess, 1)}
                                     </span>
                                     <div className="flex items-center gap-2.5 min-w-0">
-                                        <Sparkline
-                                            values={delta == null ? [] : [was, r.predictability_score]}
-                                            color={trendColor}
-                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <DeltaBar delta={delta} />
+                                        </div>
                                         <span
                                             className="num text-xs w-[38px] shrink-0 text-right"
                                             style={{ color: trendColor }}

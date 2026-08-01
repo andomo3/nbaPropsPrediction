@@ -1,18 +1,23 @@
 import React from 'react';
 import { Eyebrow, GUTTER, Insight } from '../terminal/ui';
-import { BREAK_EVEN, C, fmt, hitColor, pct, roiColor } from '../../utils/format';
+import { BREAK_EVEN, C, fmt, groupHitColor, pct, roiColor } from '../../utils/format';
 
-/** Bar fill for an edge bucket — the accent is reserved for the best bucket. */
+/**
+ * Bar fill for an edge bucket. The accent is spent on the best bucket only;
+ * buckets that clear break-even get a proportional wash, and buckets below it
+ * stay neutral grey rather than shouting in red.
+ */
 function bucketFill(hitRate, isBest) {
     if (isBest) return C.acid;
     if (hitRate == null) return 'var(--track)';
-    if (hitRate < BREAK_EVEN) return 'rgba(232,119,107,0.5)';
+    if (hitRate < BREAK_EVEN) return 'rgba(255,255,255,0.11)';
     const lift = Math.min(1, (hitRate - BREAK_EVEN) / 0.2);
-    return `rgba(200,255,77,${(0.22 + lift * 0.42).toFixed(2)})`;
+    return `rgba(200,255,77,${(0.22 + lift * 0.38).toFixed(2)})`;
 }
 
 function SplitTable({ label, rows }) {
     if (!rows?.length) return null;
+    const best = Math.max(...rows.map((r) => r.hit_rate ?? 0));
     return (
         <div className="flex flex-col gap-3.5">
             <Eyebrow wide>{label}</Eyebrow>
@@ -28,7 +33,7 @@ function SplitTable({ label, rows }) {
                         <span className="num text-xs text-ink-8">n={r.n}</span>
                         <span
                             className="num text-[15px] font-medium text-right"
-                            style={{ color: hitColor(r.hit_rate) }}
+                            style={{ color: groupHitColor(r.hit_rate, best) }}
                         >
                             {pct(r.hit_rate)}
                         </span>

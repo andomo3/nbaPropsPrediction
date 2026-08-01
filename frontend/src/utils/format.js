@@ -60,6 +60,29 @@ export function roiColor(roi) {
 }
 
 /**
+ * Colour a hit rate inside a group of comparable rows. The accent is spent on
+ * the single best value only — everything else above break-even is plain ink,
+ * everything below it is red.
+ */
+export function groupHitColor(hr, best) {
+    if (hr == null) return C.ink8;
+    if (hr < BREAK_EVEN) return C.alert;
+    if (best != null && hr >= best) return C.acid;
+    return C.ink2;
+}
+
+/**
+ * Colour a hit rate in a list of weak spots, where no value deserves the
+ * accent: red below break-even, amber just above it, plain ink otherwise.
+ */
+export function riskHitColor(hr) {
+    if (hr == null) return C.ink8;
+    if (hr < BREAK_EVEN) return C.alert;
+    if (hr < 0.58) return C.cautionText;
+    return C.ink3;
+}
+
+/**
  * Colour for a signed delta where positive is good (edge, hit-rate excess).
  * Amber rather than red for small negatives — red is reserved for results
  * that are genuinely bad, not merely below zero.

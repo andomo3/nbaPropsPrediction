@@ -10,7 +10,9 @@ import {
 } from './terminal/ui';
 import useFetch from './terminal/useFetch';
 import { PLAYERS, STATS, API_BASE } from '../utils/constants';
-import { BREAK_EVEN, C, fmt, hitColor, pct, roiColor, signed } from '../utils/format';
+import {
+    BREAK_EVEN, C, fmt, groupHitColor, hitColor, pct, riskHitColor, roiColor, signed,
+} from '../utils/format';
 
 const SEASONS = [
     { value: '2026', label: '2025–26' },
@@ -188,6 +190,8 @@ export default function SeasonReport() {
 
     const models = (comparison.data?.models ?? []).filter((m) => m.available && m.summary);
     const bestModelRoi = models.length ? Math.max(...models.map((m) => m.summary.roi)) : null;
+    const bestModelHit = models.length ? Math.max(...models.map((m) => m.summary.hit_rate)) : null;
+    const bestBand = bands.length ? Math.max(...bands.map((b) => b.hit_rate ?? 0)) : null;
 
     const bandsMonotonic = bands.length > 2
         && bands.every((b, i) => i === 0 || b.hit_rate >= bands[i - 1].hit_rate);
@@ -386,7 +390,7 @@ export default function SeasonReport() {
                                     label: b.bucket,
                                     meta: `n=${b.n}`,
                                     value: pct(b.hit_rate),
-                                    color: hitColor(b.hit_rate),
+                                    color: groupHitColor(b.hit_rate, bestBand),
                                 }))}
                                 takeaway={
                                     bands.length === 0
@@ -403,9 +407,11 @@ export default function SeasonReport() {
                                 rows={models.map((m) => ({
                                     label: m.label,
                                     value: pct(m.summary.hit_rate),
-                                    color: hitColor(m.summary.hit_rate),
+                                    color: groupHitColor(m.summary.hit_rate, bestModelHit),
                                     extra: `${signed(m.summary.roi)}%`,
-                                    extraColor: m.summary.roi === bestModelRoi ? C.acid : roiColor(m.summary.roi),
+                                    extraColor: m.summary.roi === bestModelRoi ? C.acid
+                                        : m.summary.roi < 0 ? C.alert
+                                        : C.ink2,
                                 }))}
                                 takeaway={
                                     models.length === 0
@@ -423,7 +429,7 @@ export default function SeasonReport() {
                                     label: c.label,
                                     meta: `n=${c.n}`,
                                     value: pct(c.hit_rate),
-                                    color: hitColor(c.hit_rate),
+                                    color: riskHitColor(c.hit_rate),
                                 }))}
                                 takeaway={
                                     conditions.length === 0

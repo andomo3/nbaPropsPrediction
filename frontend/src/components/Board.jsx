@@ -79,6 +79,56 @@ function BoardRow({ pick, called }) {
     );
 }
 
+/**
+ * Narrow-viewport row. The seven-column board only works with width, so below
+ * `lg` each prop becomes a stacked block that keeps the same reading order.
+ */
+function BoardCard({ pick, called }) {
+    const edge = pick.projection - pick.line;
+    const signal = signalFor(pick.confidence_pct);
+    const meter = Math.max(6, Math.min(100, ((pick.confidence_pct - 50) / 30) * 100));
+
+    return (
+        <div className={`${GUTTER} py-3.5 flex flex-col gap-3 border-b border-hair-soft ${called ? '' : 'opacity-70'}`}>
+            <div className="flex items-baseline justify-between gap-3">
+                <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className={`text-[15px] font-medium truncate ${called ? 'text-ink-1' : 'text-ink-3'}`}>
+                        {pick.player_name}
+                    </span>
+                    <span className="text-xs text-ink-8">{matchupLabel(pick)}</span>
+                </div>
+                <span
+                    className="num text-sm font-semibold shrink-0"
+                    style={{ color: called ? 'var(--ink-1)' : 'var(--ink-8)' }}
+                >
+                    {called ? pick.edge.toUpperCase() : 'PASS'}
+                </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-3">
+                {[
+                    ['Line', fmt(pick.line), C.ink3],
+                    ['Proj', fmt(pick.projection), called ? C.ink0 : C.ink3],
+                    ['Edge', signed(edge), edgeColor(edge)],
+                    ['Conf', `${pick.confidence_pct}%`, C.ink3],
+                ].map(([label, value, color]) => (
+                    <div key={label} className="flex flex-col gap-0.5">
+                        <span className="num text-[10px] tracking-eyebrow uppercase text-ink-8">{label}</span>
+                        <span className="num text-sm" style={{ color }}>{value}</span>
+                    </div>
+                ))}
+            </div>
+
+            <div className="flex items-center gap-2.5">
+                <Meter value={meter} color={signal.color} className="flex-1" />
+                <span className="num text-[11px] font-medium w-[46px] shrink-0" style={{ color: signal.color }}>
+                    {signal.label}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 function RailSection({ label, children, last = false }) {
     return (
         <div className={`px-5 xl:px-7 py-5 ${last ? '' : 'border-b border-hair'} flex flex-col gap-3.5`}>
@@ -244,7 +294,17 @@ export default function Board() {
             >
                 <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_1px_360px]">
                     <div className="flex flex-col min-w-0 border-b border-hair xl:border-b-0">
-                        <div className="table-scroll">
+                        <div className="lg:hidden">
+                            {sorted.map((p) => (
+                                <BoardCard
+                                    key={`m-${p.player_name}-${p.stat}`}
+                                    pick={p}
+                                    called={Math.abs(p.projection - p.line) >= floor}
+                                />
+                            ))}
+                        </div>
+
+                        <div className="hidden lg:block table-scroll">
                             <div className={TABLE_MIN}>
                                 <HeadRow cols={COLS}>
                                     <span>Player</span>
