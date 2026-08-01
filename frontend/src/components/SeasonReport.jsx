@@ -1,465 +1,535 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-    ComposedChart,
-    Bar,
-    Line,
-    LineChart,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    Legend,
-    ReferenceLine,
-    ResponsiveContainer,
+    CartesianGrid, Line, LineChart, ReferenceLine,
+    ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from './ui/select';
-
+    Band, Eyebrow, FootNotes, GhostSelect, GUTTER,
+    PageHead, Prose, StateBlock, Tabs,
+} from './terminal/ui';
+import VerdictClaims from './intelligence/VerdictClaims';
+import useFetch from './terminal/useFetch';
 import { PLAYERS, STATS, API_BASE } from '../utils/constants';
+import {
+    BREAK_EVEN, C, fmt, groupHitColor, hitColor, pct, riskHitColor, roiColor, signed,
+} from '../utils/format';
 
 const SEASONS = [
-    { value: '2026', label: '2025-26' },
-    { value: '2025', label: '2024-25' },
-    { value: '2024', label: '2023-24' },
-    { value: '2023', label: '2022-23' },
+    { value: '2026', label: '2025–26' },
+    { value: '2025', label: '2024–25' },
+    { value: '2024', label: '2023–24' },
+    { value: '2023', label: '2022–23' },
 ];
 
-// Color palette for the 4 models
-const MODEL_COLORS = {
-    xgb:   '#f59e0b',  // amber
-    rf:    '#6366f1',  // indigo
-    lr:    '#22c55e',  // green
-    naive: '#94a3b8',  // slate
+const STAT_TABS = STATS.map((s) => ({ value: s.key, label: s.label }));
+const PLAYER_OPTIONS = PLAYERS.map((p) => ({ value: p, label: p }));
+
+/** The edge floor the board applies — the report card grades the same rule. */
+const EDGE_FLOOR = 1.0;
+
+const VERDICT_COLOR = {
+    'Strong signal':      C.acid,
+    'Moderate signal':    C.cautionText,
+    'Weak signal':        C.cautionText,
+    'No reliable signal': C.alert,
+    'Insufficient data':  C.ink8,
 };
 
-const tooltipStyle = {
-    contentStyle: {
-        background: 'var(--card)',
-        border: '1px solid var(--border)',
-        borderRadius: '8px',
-        fontSize: 12,
-    },
+const VERDICT_DOT = {
+    'Strong signal':      C.acid,
+    'Moderate signal':    C.caution,
+    'Weak signal':        C.caution,
+    'No reliable signal': C.alert,
+    'Insufficient data':  C.ink8,
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function best(models, key, direction = 'low') {
-    const available = models.filter((m) => m.available && m.summary);
-    if (!available.length) return null;
-    return available.reduce((a, b) =>
-        direction === 'low'
-            ? a.summary[key] < b.summary[key] ? a : b
-            : a.summary[key] > b.summary[key] ? a : b
-    ).model;
+/** Largest peak-to-trough fall in a cumulative P&L series, in units. */
+function maxDrawdown(series) {
+    let peak = 0;
+    let worst = 0;
+    let from = null;
+    let to = null;
+    let peakAt = null;
+    for (const pt of series) {
+        if (pt.value > peak) {
+            peak = pt.value;
+            peakAt = pt.date;
+        }
+        const dd = peak - pt.value;
+        if (dd > worst) {
+            worst = dd;
+            from = peakAt;
+            to = pt.date;
+        }
+    }
+    return { value: worst, from, to };
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, sub, highlight }) {
-    const colorClass =
-        highlight === 'green' ? 'text-green-400'
-        : highlight === 'red' ? 'text-red-400'
-        : highlight === 'amber' ? 'text-amber-400'
-        : 'text-foreground';
-    return (
-        <div className="flex flex-col gap-1 bg-card border border-border rounded-xl p-4">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-                {label}
-            </span>
-            <span className={`text-2xl font-bold ${colorClass}`}>{value}</span>
-            {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
-        </div>
-    );
-}
-
-function ModelComparisonTable({ comparison }) {
-    if (!comparison) return null;
-    const { models } = comparison;
-    const bestMae     = best(models, 'mae',      'low');
-    const bestHitRate = best(models, 'hit_rate', 'high');
-    const bestRoi     = best(models, 'roi',      'high');
-
-    return (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-border">
-                <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">
-                    Model Comparison
-                </p>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                    <thead className="border-b border-border bg-card">
-                        <tr>
-                            {['Model', 'MAE', 'Hit Rate', 'ROI', 'P&L'].map((h) => (
-                                <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">
-                                    {h}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {models.map((m) => (
-                            <tr key={m.model} className="border-b border-border/50 hover:bg-accent/20 transition-colors">
-                                {/* Model name with colour dot */}
-                                <td className="px-5 py-3 font-medium">
-                                    <div className="flex items-center gap-2">
-                                        <span
-                                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                                            style={{ background: MODEL_COLORS[m.model] }}
-                                        />
-                                        {m.label}
-                                    </div>
-                                </td>
-                                {m.available && m.summary ? (
-                                    <>
-                                        <td className={`px-5 py-3 font-semibold ${m.model === bestMae ? 'text-green-400' : ''}`}>
-                                            {m.summary.mae.toFixed(2)}
-                                        </td>
-                                        <td className={`px-5 py-3 font-semibold ${m.model === bestHitRate ? 'text-green-400' : ''}`}>
-                                            {(m.summary.hit_rate * 100).toFixed(1)}%
-                                        </td>
-                                        <td className={`px-5 py-3 font-semibold ${
-                                            m.model === bestRoi ? 'text-green-400'
-                                            : m.summary.roi < 0 ? 'text-red-400' : ''
-                                        }`}>
-                                            {m.summary.roi >= 0 ? '+' : ''}{m.summary.roi.toFixed(1)}%
-                                        </td>
-                                        <td className={`px-5 py-3 font-semibold ${m.summary.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                            {m.summary.total_pnl >= 0 ? '+' : ''}{m.summary.total_pnl.toFixed(2)}u
-                                        </td>
-                                    </>
-                                ) : (
-                                    <td colSpan={4} className="px-5 py-3 text-muted-foreground text-xs italic">
-                                        Not yet seeded
-                                    </td>
-                                )}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-}
-
-function OverlayTooltip({ active, payload, label }) {
+function ChartTooltip({ active, payload, label }) {
     if (!active || !payload?.length) return null;
     return (
-        <div style={{
-            background: 'var(--card)',
-            border: '1px solid var(--border)',
-            borderRadius: 8, padding: '8px 12px', fontSize: 12,
-        }}>
-            <p className="font-semibold mb-1">{label}</p>
+        <div className="bg-popover border border-hair-control rounded-lg px-3 py-2">
+            <p className="num text-[11px] tracking-eyebrow uppercase text-ink-8 mb-1.5">{label}</p>
             {payload.map((p) => (
-                <p key={p.dataKey} style={{ color: p.color }}>
-                    {p.name}: <strong>{typeof p.value === 'number' ? p.value.toFixed(1) : p.value}</strong>
+                <p key={p.dataKey} className="text-xs text-ink-5">
+                    {p.name}:{' '}
+                    <span className="num font-medium" style={{ color: p.color }}>
+                        {p.value >= 0 ? '+' : '−'}{Math.abs(p.value).toFixed(2)}u
+                    </span>
                 </p>
             ))}
         </div>
     );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
-const SeasonReport = () => {
-    const [player, setPlayer] = useState(PLAYERS[0]);
-    const [stat, setStat]     = useState('pts');
-    const [season, setSeason] = useState('2026');
-
-    const [data, setData]           = useState(null);
-    const [comparison, setComparison] = useState(null);
-    const [loading, setLoading]     = useState(false);
-    const [error, setError]         = useState(null);
-
-    useEffect(() => {
-        setLoading(true);
-        setError(null);
-        setData(null);
-        setComparison(null);
-
-        const params = new URLSearchParams({ player_name: player, stat, season });
-
-        const fetchSummary = fetch(`${API_BASE}/api/backtest/season-summary/?${params}`)
-            .then((res) => {
-                const ct = res.headers.get('content-type') || '';
-                if (!ct.includes('application/json')) throw new Error(`Server error (HTTP ${res.status})`);
-                return res.json().then((json) => ({ ok: res.ok, json }));
-            })
-            .then(({ ok, json }) => {
-                if (!ok) throw new Error(json.detail || 'Request failed');
-                setData(json);
-            });
-
-        const fetchComparison = fetch(`${API_BASE}/api/backtest/model-comparison/?${params}`)
-            .then((res) => {
-                const ct = res.headers.get('content-type') || '';
-                if (!ct.includes('application/json')) return null;
-                return res.json().then((json) => ({ ok: res.ok, json }));
-            })
-            .then((result) => {
-                if (result?.ok) setComparison(result.json);
-            })
-            .catch(() => {}); // comparison is non-critical — silently skip if unavailable
-
-        Promise.all([fetchSummary, fetchComparison])
-            .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
-    }, [player, stat, season]);
-
-    // ── Derived values ────────────────────────────────────────────────────────
-    const summary  = data?.summary;
-    const perGame  = data?.per_game ?? [];
-    const seasonLabel = data?.season ?? SEASONS.find((s) => s.value === season)?.label ?? season;
-    const pnlColor = summary?.total_pnl >= 0 ? '#22c55e' : '#ef4444';
-    const statLabel = STATS.find((s) => s.key === stat)?.label ?? stat;
-
-    // Single-model chart data (for the PnL chart)
-    const pnlChartData = perGame.map((g) => ({
-        date: g.date.slice(5),
-        pnl:  parseFloat(g.cumulative_pnl.toFixed(2)),
-    }));
-
-    // Overlay chart data — merge actuals + all model projections by index
-    const overlayChartData = (() => {
-        if (!comparison) return null;
-        return comparison.dates.map((date, i) => {
-            const point = { date: date.slice(5), actual: comparison.actuals[i] };
-            comparison.models.forEach((m) => {
-                if (m.available && m.projections[i] != null) {
-                    point[m.model] = m.projections[i];
-                }
-            });
-            return point;
-        });
-    })();
-
-    // Summary card highlights
-    const hitRateHighlight = !summary ? null : summary.hit_rate >= 0.5524 ? 'green' : 'red';
-    const roiHighlight     = !summary ? null : summary.roi >= 0 ? 'green' : 'red';
-    const pnlHighlight     = !summary ? null : summary.total_pnl >= 0 ? 'green' : 'red';
-    const biasHighlight    = !summary ? null
-        : Math.abs(summary.bias) < 0.5 ? 'green'
-        : Math.abs(summary.bias) < 1.5 ? 'amber' : 'red';
-
+/** One column of the evidence row. */
+function Evidence({ label, rows, takeaway, cols }) {
     return (
-        <div className="w-full max-w-4xl mx-auto text-left">
-
-            {/* ── Header ──────────────────────────────────────────────────── */}
-            <div className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
-                    Season Report Card
-                </h1>
-                <p className="text-muted-foreground mt-1 text-sm">
-                    How well did the model predict each player over a full season?
-                </p>
-            </div>
-
-            {/* ── Controls ────────────────────────────────────────────────── */}
-            <div className="bg-card border border-border rounded-2xl p-5 mb-8">
-                <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="space-y-2">
-                        <span className="text-xs uppercase tracking-wider font-semibold text-primary block">player</span>
-                        <Select value={player} onValueChange={setPlayer}>
-                            <SelectTrigger className="h-11 bg-input border-border rounded-xl">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-popover border-border rounded-xl">
-                                {PLAYERS.map((p) => (
-                                    <SelectItem key={p} value={p} className="text-sm py-2.5">{p}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                        <span className="text-xs uppercase tracking-wider font-semibold text-primary block">stat</span>
-                        <div className="flex gap-1 bg-input rounded-xl p-1 h-11">
-                            {STATS.map(({ key, label }) => (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => setStat(key)}
-                                    className={`flex-1 text-sm font-medium rounded-lg transition-colors ${
-                                        stat === key
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <span className="text-xs uppercase tracking-wider font-semibold text-primary block">season</span>
-                        <Select value={season} onValueChange={setSeason}>
-                            <SelectTrigger className="h-11 bg-input border-border rounded-xl">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-popover border-border rounded-xl">
-                                {SEASONS.map((s) => (
-                                    <SelectItem key={s.value} value={s.value} className="text-sm py-2.5">{s.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Loading ──────────────────────────────────────────────────── */}
-            {loading && (
-                <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">
-                    Loading report...
-                </div>
-            )}
-
-            {/* ── Error ────────────────────────────────────────────────────── */}
-            {!loading && error && (
-                <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
-                    <span className="text-3xl">—</span>
-                    <p className="text-muted-foreground text-sm max-w-sm">{error}</p>
-                    <p className="text-xs text-muted-foreground/60">
-                        Data is seeded for the 2025-26 season. Other seasons may not yet be available.
-                    </p>
-                </div>
-            )}
-
-            {/* ── Results ──────────────────────────────────────────────────── */}
-            {!loading && !error && data && (
-                <div className="space-y-6">
-
-                    <div className="flex items-baseline gap-2">
-                        <h2 className="text-lg font-semibold text-foreground">{player}</h2>
-                        <span className="text-sm text-muted-foreground">
-                            — {statLabel} · {seasonLabel}
+        <div className="px-5 sm:px-8 lg:px-16 pt-12 pb-11">
+            <Eyebrow section>{label}</Eyebrow>
+            <div className="mt-7 flex flex-col">
+                {rows.length === 0 && <p className="text-sm text-ink-7 py-2">Not available.</p>}
+                {rows.map((r) => (
+                    <div
+                        key={r.label}
+                        style={{ gridTemplateColumns: cols }}
+                        className="grid gap-5 items-baseline py-4 border-b border-hair-row"
+                    >
+                        <span className="text-base text-ink-3 truncate">{r.label}</span>
+                        {r.meta != null && (
+                            <span className="num text-[13px] text-ink-8 text-right">{r.meta}</span>
+                        )}
+                        <span
+                            className="num text-lg font-medium text-right"
+                            style={{ color: r.color }}
+                        >
+                            {r.value}
                         </span>
+                        {r.extra != null && (
+                            <span
+                                className="num text-[17px] font-medium text-right"
+                                style={{ color: r.extraColor }}
+                            >
+                                {r.extra}
+                            </span>
+                        )}
                     </div>
-
-                    {/* ── XGBoost summary cards ─────────────────────────── */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <StatCard label="Games" value={summary.total_games} />
-                        <StatCard label="MAE" value={summary.mae.toFixed(2)} sub="Mean absolute error" />
-                        <StatCard
-                            label="Bias"
-                            value={`${summary.bias >= 0 ? '+' : ''}${summary.bias.toFixed(2)}`}
-                            sub={summary.bias >= 0 ? 'Model under-projected' : 'Model over-projected'}
-                            highlight={biasHighlight}
-                        />
-                        <StatCard label="Hit Rate" value={`${(summary.hit_rate * 100).toFixed(1)}%`} sub="Over/under correct" highlight={hitRateHighlight} />
-                        <StatCard label="P&L (units)" value={`${summary.total_pnl >= 0 ? '+' : ''}${summary.total_pnl.toFixed(2)}`} highlight={pnlHighlight} />
-                        <StatCard label="ROI" value={`${summary.roi >= 0 ? '+' : ''}${summary.roi.toFixed(1)}%`} sub="At -110 odds" highlight={roiHighlight} />
-                    </div>
-
-                    {/* ── Model comparison table ────────────────────────── */}
-                    <ModelComparisonTable comparison={comparison} />
-
-                    {/* ── Overlay chart: all 4 projection lines ─────────── */}
-                    {overlayChartData && overlayChartData.length > 0 && (
-                        <div className="bg-card border border-border rounded-2xl p-5">
-                            <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-4">
-                                Actual vs All Model Projections
-                            </p>
-                            <ResponsiveContainer width="100%" height={260}>
-                                <ComposedChart data={overlayChartData} margin={{ top: 4, right: 12, bottom: 4, left: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-                                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#888' }} interval="preserveStartEnd" />
-                                    <YAxis tick={{ fontSize: 10, fill: '#888' }} />
-                                    <Tooltip content={<OverlayTooltip />} />
-                                    <Legend wrapperStyle={{ fontSize: 12, color: '#888' }} />
-                                    <Bar dataKey="actual" name="Actual" fill="rgba(99,102,241,0.35)" radius={[2,2,0,0]} maxBarSize={10} />
-                                    {comparison.models.filter((m) => m.available).map((m) => (
-                                        <Line
-                                            key={m.model}
-                                            type="monotone"
-                                            dataKey={m.model}
-                                            name={m.label}
-                                            stroke={MODEL_COLORS[m.model]}
-                                            dot={false}
-                                            strokeWidth={2}
-                                        />
-                                    ))}
-                                </ComposedChart>
-                            </ResponsiveContainer>
-                        </div>
-                    )}
-
-                    {/* ── Cumulative P&L (XGBoost) ──────────────────────── */}
-                    {pnlChartData.length > 0 && (
-                        <div className="bg-card border border-border rounded-2xl p-5">
-                            <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-4">
-                                Cumulative P&L — XGBoost (flat-unit at -110)
-                            </p>
-                            <ResponsiveContainer width="100%" height={180}>
-                                <LineChart data={pnlChartData} margin={{ top: 4, right: 12, bottom: 4, left: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
-                                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#888' }} interval="preserveStartEnd" />
-                                    <YAxis tick={{ fontSize: 10, fill: '#888' }} />
-                                    <Tooltip
-                                        {...tooltipStyle}
-                                        formatter={(v) => [`${v >= 0 ? '+' : ''}${v}u`, 'Cumulative P&L']}
-                                        labelFormatter={(l) => `Date: ${l}`}
-                                    />
-                                    <ReferenceLine y={0} stroke="rgba(255,255,255,0.25)" strokeDasharray="4 2" />
-                                    <Line type="monotone" dataKey="pnl" stroke={pnlColor} dot={false} strokeWidth={2} />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        </div>
-                    )}
-
-                    {/* ── Game-by-game table ─────────────────────────────── */}
-                    {perGame.length > 0 && (
-                        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-                            <div className="px-5 py-3 border-b border-border">
-                                <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">
-                                    Game-by-Game Breakdown
-                                </p>
-                            </div>
-                            <div className="overflow-y-auto max-h-96">
-                                <table className="w-full text-sm">
-                                    <thead className="sticky top-0 bg-card border-b border-border">
-                                        <tr>
-                                            {['Date','Opp','Actual','Proj','Error','Line','','P&L'].map((h) => (
-                                                <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">{h}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {perGame.map((g, i) => (
-                                            <tr key={i} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
-                                                <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{g.date}</td>
-                                                <td className="px-4 py-2.5 font-medium">{g.opponent}</td>
-                                                <td className="px-4 py-2.5 font-semibold">{g.actual}</td>
-                                                <td className="px-4 py-2.5 text-muted-foreground">{Number(g.projection).toFixed(1)}</td>
-                                                <td className={`px-4 py-2.5 font-medium ${g.error > 0 ? 'text-green-400' : g.error < 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
-                                                    {g.error >= 0 ? '+' : ''}{Number(g.error).toFixed(1)}
-                                                </td>
-                                                <td className="px-4 py-2.5 text-muted-foreground">{Number(g.line).toFixed(1)}</td>
-                                                <td className="px-4 py-2.5">
-                                                    {g.correct
-                                                        ? <span className="text-green-400 font-bold">✓</span>
-                                                        : <span className="text-red-400 font-bold">✗</span>}
-                                                </td>
-                                                <td className={`px-4 py-2.5 font-semibold ${g.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                                    {g.pnl >= 0 ? '+' : ''}{Number(g.pnl).toFixed(2)}u
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                ))}
+            </div>
+            {takeaway && (
+                <Prose size="narrow" className="mt-7 text-ink-6">{takeaway}</Prose>
             )}
         </div>
     );
-};
+}
 
-export default SeasonReport;
+export default function SeasonReport() {
+    const [params, setParams] = useSearchParams();
+    const player = params.get('player_name') || PLAYERS[0];
+    const stat = params.get('stat') || 'pts';
+    const season = params.get('season') || '2026';
+
+    const set = (key, value) => {
+        const next = new URLSearchParams(params);
+        next.set('player_name', player);
+        next.set('stat', stat);
+        next.set('season', season);
+        next.set(key, value);
+        setParams(next, { replace: true });
+    };
+
+    const qs = `?player_name=${encodeURIComponent(player)}&stat=${stat}&season=${season}`;
+    const summaryReq   = useFetch(`${API_BASE}/api/backtest/season-summary/${qs}`);
+    const comparison   = useFetch(`${API_BASE}/api/backtest/model-comparison/${qs}`);
+    const validation   = useFetch(`${API_BASE}/api/intelligence/validation/${qs}`);
+    const calibration  = useFetch(`${API_BASE}/api/intelligence/edge/${qs}`);
+
+    const data = summaryReq.data;
+    const summary = data?.summary;
+    const perGame = data?.per_game ?? [];
+    const statLabel = STATS.find((s) => s.key === stat)?.label ?? stat;
+
+    /* Two cumulative curves off the same graded games: every bet, and only the
+       bets that clear the edge floor the board actually applies. */
+    const { chart, filteredTotal, allTotal, filteredN, drawdown } = useMemo(() => {
+        let cumAll = 0;
+        let cumFiltered = 0;
+        let n = 0;
+        const series = perGame.map((g) => {
+            cumAll += g.pnl;
+            const clears = Math.abs(g.projection - g.line) >= EDGE_FLOOR;
+            if (clears) {
+                cumFiltered += g.pnl;
+                n += 1;
+            }
+            return {
+                date: g.date.slice(5),
+                all: Number(cumAll.toFixed(2)),
+                filtered: Number(cumFiltered.toFixed(2)),
+            };
+        });
+        return {
+            chart: series,
+            allTotal: cumAll,
+            filteredTotal: cumFiltered,
+            filteredN: n,
+            drawdown: maxDrawdown(series.map((p) => ({ date: p.date, value: p.filtered }))),
+        };
+    }, [perGame]);
+
+    const verdict = validation.data?.verdict;
+    const bands = calibration.data?.edge_bands ?? [];
+    const conditions = useMemo(() => {
+        const rest = calibration.data?.rest_analysis ?? [];
+        const form = calibration.data?.form_analysis ?? [];
+        return [...rest, ...form]
+            .filter((r) => r.hit_rate != null)
+            .sort((a, b) => a.hit_rate - b.hit_rate)
+            .slice(0, 4);
+    }, [calibration.data]);
+
+    const models = (comparison.data?.models ?? []).filter((m) => m.available && m.summary);
+    const bestModelRoi = models.length ? Math.max(...models.map((m) => m.summary.roi)) : null;
+    const bestModelHit = models.length ? Math.max(...models.map((m) => m.summary.hit_rate)) : null;
+    const bestBand = bands.length ? Math.max(...bands.map((b) => b.hit_rate ?? 0)) : null;
+
+    const bandsMonotonic = bands.length > 2
+        && bands.every((b, i) => i === 0 || b.hit_rate >= bands[i - 1].hit_rate);
+    const failing = conditions.filter((c) => c.hit_rate < BREAK_EVEN).length;
+
+    return (
+        <>
+            <PageHead
+                eyebrow={
+                    summary
+                        ? `${data.season} · ${statLabel.toUpperCase()} · ${summary.total_games} GRADED GAMES`
+                        : `${SEASONS.find((s) => s.value === season)?.label ?? season} · ${statLabel.toUpperCase()}`
+                }
+                title="Season report card"
+                controls={
+                    <>
+                        <GhostSelect
+                            value={player}
+                            onChange={(v) => set('player_name', v)}
+                            options={PLAYER_OPTIONS}
+                            label="Player"
+                        />
+                        <Tabs
+                            options={STAT_TABS}
+                            value={stat}
+                            onChange={(v) => set('stat', v)}
+                            ariaLabel="Stat"
+                        />
+                        <GhostSelect
+                            value={season}
+                            onChange={(v) => set('season', v)}
+                            options={SEASONS}
+                            label="Season"
+                        />
+                    </>
+                }
+            />
+
+            <StateBlock
+                loading={summaryReq.loading}
+                error={summaryReq.error}
+                empty={!summary ? 'No graded games for this player, stat and season.' : null}
+                emptyHint="python manage.py seed_season_backtest --season 2026"
+            >
+                {summary && (
+                    <>
+                        {/* Verdict, then the claims behind it, then the results.
+                            Rhythm: label → 24 → verdict → 40 → claims → 56 → figures. */}
+                        <Band className="py-14">
+                            <div className="flex flex-col">
+                                <div className="flex flex-col min-w-0">
+                                    <Eyebrow section>Season verdict</Eyebrow>
+                                    {verdict ? (
+                                        <div className="mt-6 flex items-center gap-3.5">
+                                            <span
+                                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                                style={{ background: VERDICT_DOT[verdict] ?? C.ink8 }}
+                                            />
+                                            <span
+                                                className="text-[28px] sm:text-[34px] font-semibold tracking-tightest leading-none"
+                                                style={{ color: VERDICT_COLOR[verdict] ?? C.ink8 }}
+                                            >
+                                                {verdict}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <span className="mt-6 text-[28px] sm:text-[34px] font-semibold text-ink-8 leading-none">
+                                            {validation.loading ? 'Grading…' : 'Not graded'}
+                                        </span>
+                                    )}
+
+                                    <VerdictClaims validation={validation.data} className="mt-10" />
+                                </div>
+
+                                <div className="mt-14 grid grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-4 lg:gap-x-12">
+                                    <div className="flex flex-col gap-2.5">
+                                        <Eyebrow wide>Hit rate</Eyebrow>
+                                        <div className="num text-[30px] sm:text-[38px] font-medium leading-none" style={{ color: hitColor(summary.hit_rate) }}>
+                                            {pct(summary.hit_rate)}
+                                        </div>
+                                        <div className="text-[13px] text-ink-7">
+                                            {Math.round(summary.hit_rate * summary.total_games)} of {summary.total_games} · break-even 52.4%
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2.5">
+                                        <Eyebrow wide>ROI</Eyebrow>
+                                        <div className="num text-[30px] sm:text-[38px] font-medium leading-none" style={{ color: roiColor(summary.roi) }}>
+                                            {signed(summary.roi)}%
+                                        </div>
+                                        <div className="text-[13px] text-ink-7">
+                                            {signed(summary.total_pnl, 2)}u flat at −110
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2.5">
+                                        <Eyebrow wide>MAE</Eyebrow>
+                                        <div className="num text-[30px] sm:text-[38px] font-medium text-ink-0 leading-none">
+                                            {fmt(summary.mae, 2)}
+                                        </div>
+                                        <div className="text-[13px] text-ink-7">
+                                            bias {signed(summary.bias, 2)}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2.5">
+                                        <Eyebrow wide>Max drawdown</Eyebrow>
+                                        <div className="num text-[30px] sm:text-[38px] font-medium leading-none" style={{ color: drawdown.value > 0 ? C.cautionText : C.ink0 }}>
+                                            −{fmt(drawdown.value, 2)}u
+                                        </div>
+                                        <div className="text-[13px] text-ink-7">
+                                            {drawdown.from ? `${drawdown.from} – ${drawdown.to}` : 'no drawdown'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </Band>
+
+                        {/* Cumulative P&L */}
+                        {chart.length > 0 && (
+                            <Band className="py-14">
+                                <h2 className="text-[22px] sm:text-[24px] font-semibold tracking-[-0.02em] text-ink-1 leading-none">
+                                    Cumulative profit &amp; loss
+                                </h2>
+                                <Prose size="wide" className="mt-4 text-ink-6">
+                                    Flat one-unit stakes at −110, {statLabel.toLowerCase()}, with and without the
+                                    edge ≥ {fmt(EDGE_FLOOR)} filter the board applies.
+                                </Prose>
+
+                                <div className="mt-8 flex items-center gap-7 text-[13px] text-ink-7">
+                                    <span className="flex items-center gap-2.5">
+                                        <span className="w-4 h-0.5 bg-acid" />
+                                        Filtered ({filteredN})
+                                    </span>
+                                    <span className="flex items-center gap-2.5">
+                                        <span className="w-4 h-0.5 bg-white/[0.28]" />
+                                        Every bet ({perGame.length})
+                                    </span>
+                                </div>
+
+                                <div className="mt-9 flex flex-col gap-1">
+                                    <span className="num text-[28px] sm:text-[32px] font-medium leading-none" style={{ color: roiColor(filteredTotal) }}>
+                                        {signed(filteredTotal, 1)}u
+                                    </span>
+                                    <span className="text-sm text-ink-7">
+                                        every bet: {signed(allTotal, 1)}u
+                                    </span>
+                                </div>
+
+                                <div className="relative mt-7">
+                                    <ResponsiveContainer width="100%" height={260}>
+                                        <LineChart data={chart} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
+                                            <CartesianGrid
+                                                vertical={false}
+                                                stroke="rgba(255,255,255,0.05)"
+                                            />
+                                            <XAxis
+                                                dataKey="date"
+                                                tick={{ fontSize: 11, fill: 'var(--ink-8)', fontFamily: 'IBM Plex Mono' }}
+                                                tickLine={false}
+                                                axisLine={{ stroke: 'var(--hair-rule)' }}
+                                                interval="preserveStartEnd"
+                                                minTickGap={40}
+                                            />
+                                            <YAxis hide domain={['auto', 'auto']} />
+                                            <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.14)' }} />
+                                            <ReferenceLine y={0} stroke="rgba(255,255,255,0.14)" strokeDasharray="4 5" />
+                                            {/* The filtered line arrives first, by
+                                                140ms, so the divergence reads as the
+                                                point of the chart. */}
+                                            <Line
+                                                type="monotone"
+                                                dataKey="filtered"
+                                                name="Filtered"
+                                                stroke={C.acid}
+                                                strokeWidth={2.5}
+                                                dot={false}
+                                                animationBegin={120}
+                                                animationDuration={1500}
+                                                animationEasing="ease-out"
+                                            />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="all"
+                                                name="Every bet"
+                                                stroke="rgba(255,255,255,0.28)"
+                                                strokeWidth={2}
+                                                dot={false}
+                                                animationBegin={260}
+                                                animationDuration={1500}
+                                                animationEasing="ease-out"
+                                            />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </Band>
+                        )}
+
+                        {/* Two evidence columns, not three — at three the rows
+                            get too narrow to hold a label and two figures. */}
+                        <Band padded={false} className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] divide-y lg:divide-y-0">
+                            <Evidence
+                                label="Calibration by edge bucket"
+                                cols="1fr auto 66px"
+                                rows={bands.map((b) => ({
+                                    label: b.bucket,
+                                    meta: `n=${b.n}`,
+                                    value: pct(b.hit_rate),
+                                    color: groupHitColor(b.hit_rate, bestBand),
+                                }))}
+                                takeaway={
+                                    bands.length === 0
+                                        ? null
+                                        : bandsMonotonic
+                                            ? 'Monotonic across buckets — the projected edge is real, it just needs a floor.'
+                                            : 'Not monotonic across buckets — a bigger projected edge does not reliably convert here.'
+                                }
+                            />
+                            <div className="hidden lg:block bg-hair" aria-hidden="true" />
+                            <Evidence
+                                label="By model"
+                                cols="1fr 70px 70px"
+                                rows={models.map((m) => ({
+                                    label: m.label,
+                                    value: pct(m.summary.hit_rate),
+                                    color: groupHitColor(m.summary.hit_rate, bestModelHit),
+                                    extra: `${signed(m.summary.roi)}%`,
+                                    extraColor: m.summary.roi === bestModelRoi ? C.acid
+                                        : m.summary.roi < 0 ? C.alert
+                                        : C.ink2,
+                                }))}
+                                takeaway={
+                                    models.length === 0
+                                        ? null
+                                        : `Hit rate and ROI for the same graded games. ${
+                                            models.find((m) => m.summary.roi === bestModelRoi)?.label
+                                          } leads on return.`
+                                }
+                            />
+                        </Band>
+
+                        {/* Where it struggles gets the full width — four
+                            conditions across two columns rather than a third
+                            cramped rail. */}
+                        <Band className="py-12">
+                            <Eyebrow section>Where it struggles</Eyebrow>
+                            <div className="mt-7 grid grid-cols-1 sm:grid-cols-2 gap-x-16">
+                                {conditions.length === 0 && (
+                                    <p className="text-sm text-ink-7 py-2">Not available.</p>
+                                )}
+                                {conditions.map((c) => (
+                                    <div
+                                        key={c.label}
+                                        className="grid grid-cols-[minmax(0,1fr)_70px_84px] gap-5 items-baseline py-4 border-b border-hair-row"
+                                    >
+                                        <span className="text-base text-ink-3 truncate">{c.label}</span>
+                                        <span className="num text-[13px] text-ink-8 text-right">n={c.n}</span>
+                                        <span
+                                            className="num text-lg font-medium text-right"
+                                            style={{ color: riskHitColor(c.hit_rate) }}
+                                        >
+                                            {pct(c.hit_rate)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                            {conditions.length > 0 && (
+                                <Prose size="narrow" className="mt-7 text-ink-6">
+                                    {failing === 0
+                                        ? 'No split falls below break-even — the weakest conditions still clear 52.4%.'
+                                        : `${failing} of these ${conditions.length} conditions sit below the 52.4% break-even line.`}
+                                </Prose>
+                            )}
+                        </Band>
+
+                        {/* Game by game — depth on demand, collapsed by default */}
+                        {perGame.length > 0 && (
+                            <Band padded={false}>
+                                <details className="group">
+                                    <summary className={`${GUTTER} py-4 flex items-center gap-3 cursor-pointer select-none list-none`}>
+                                        <Eyebrow wide>Game by game</Eyebrow>
+                                        <span className="text-[13px] text-ink-7 group-open:hidden">
+                                            {perGame.length} graded games →
+                                        </span>
+                                        <span className="text-[13px] text-ink-7 hidden group-open:inline">
+                                            hide
+                                        </span>
+                                    </summary>
+                                    <div className="table-scroll max-h-[420px] overflow-y-auto border-t border-hair">
+                                        <div className="min-w-[720px]">
+                                            <div className={`grid grid-cols-[92px_64px_repeat(5,minmax(0,1fr))_72px] gap-4 ${GUTTER} py-2.5 border-b border-hair num text-[11px] font-medium tracking-eyebrow uppercase text-ink-8 sticky top-0 bg-background`}>
+                                                <span>Date</span>
+                                                <span>Opp</span>
+                                                <span className="text-right">Actual</span>
+                                                <span className="text-right">Proj</span>
+                                                <span className="text-right">Line</span>
+                                                <span className="text-right">Error</span>
+                                                <span className="text-right">Edge</span>
+                                                <span className="text-right">P&amp;L</span>
+                                            </div>
+                                            {perGame.map((g, i) => {
+                                                const edge = g.projection - g.line;
+                                                return (
+                                                    <div
+                                                        key={`${g.date}-${i}`}
+                                                        className={`grid grid-cols-[92px_64px_repeat(5,minmax(0,1fr))_72px] gap-4 ${GUTTER} py-2.5 border-b border-hair-soft items-baseline`}
+                                                    >
+                                                        <span className="num text-[13px] text-ink-8">{g.date}</span>
+                                                        <span className="text-[13px] text-ink-3">{g.opponent}</span>
+                                                        <span className="num text-[13px] text-ink-1 text-right">{fmt(g.actual)}</span>
+                                                        <span className="num text-[13px] text-ink-3 text-right">{fmt(g.projection)}</span>
+                                                        <span className="num text-[13px] text-ink-5 text-right">{fmt(g.line)}</span>
+                                                        <span className="num text-[13px] text-right" style={{ color: Math.abs(g.error) <= 3 ? C.ink3 : C.cautionText }}>
+                                                            {signed(g.error)}
+                                                        </span>
+                                                        <span className="num text-[13px] text-right" style={{ color: Math.abs(edge) >= EDGE_FLOOR ? C.ink2 : C.ink8 }}>
+                                                            {signed(edge)}
+                                                        </span>
+                                                        <span className="num text-[13px] text-right font-medium" style={{ color: g.pnl >= 0 ? C.acid : C.alert }}>
+                                                            {signed(g.pnl, 2)}u
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </details>
+                            </Band>
+                        )}
+
+                        <FootNotes
+                            items={[
+                                'Flat one-unit stakes at −110 · no vig shopping modelled',
+                                'Binomial test vs the 52.4% break-even rate',
+                                `Filtered curve takes only bets with a projected edge of ${fmt(EDGE_FLOOR)}+ pts`,
+                            ]}
+                        />
+                    </>
+                )}
+            </StateBlock>
+        </>
+    );
+}
